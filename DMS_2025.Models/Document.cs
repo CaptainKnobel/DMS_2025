@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace DMS_2025_Models
+namespace DMS_2025.Models
 {
     public class Document
     {
