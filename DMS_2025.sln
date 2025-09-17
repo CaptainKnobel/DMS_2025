@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.DAL", "DMS_2025.DA
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.Models", "DMS_2025.Models\DMS_2025.Models.csproj", "{80B5AF3A-30DB-4B6F-9CF2-3B161B151690}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.Tests", "DMS_2025.Tests\DMS_2025.Tests.csproj", "{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,6 +34,10 @@ Global
 		{80B5AF3A-30DB-4B6F-9CF2-3B161B151690}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{80B5AF3A-30DB-4B6F-9CF2-3B161B151690}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{80B5AF3A-30DB-4B6F-9CF2-3B161B151690}.Release|Any CPU.Build.0 = Release|Any CPU
+		{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
