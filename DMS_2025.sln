@@ -16,6 +16,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.Models", "DMS_2025
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.Tests", "DMS_2025.Tests\DMS_2025.Tests.csproj", "{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.REST", "DMS_2025.REST\DMS_2025.REST.csproj", "{1A1A1F00-6201-428F-83DD-223EBB24C889}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,6 +40,10 @@ Global
 		{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1A1A1F00-6201-428F-83DD-223EBB24C889}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1A1A1F00-6201-428F-83DD-223EBB24C889}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1A1A1F00-6201-428F-83DD-223EBB24C889}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1A1A1F00-6201-428F-83DD-223EBB24C889}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
