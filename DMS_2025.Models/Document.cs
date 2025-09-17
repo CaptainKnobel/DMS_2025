@@ -15,7 +15,7 @@ namespace DMS_2025.Models
         public string? Location { get; set; }
 
         // metadata
-        public TimeSpan? CreationDate { get; set; }
+        public DateTime? CreationDate { get; set; }
         public string? Author { get; set; }
     }
 }

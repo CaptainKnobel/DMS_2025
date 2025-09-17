@@ -1,25 +1,18 @@
-﻿using System.Collections.Generic;
-using DMS_2025.Models;
+﻿using DMS_2025.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace DMS_2025.DAL.Context
 {
     public class DmsDbContext : DbContext
     {
-        private readonly IConfiguration _configuration;
+        public DmsDbContext(DbContextOptions<DmsDbContext> options) : base(options) { }
 
-        public DbSet<Document> Documents { get; set; }
+        public DbSet<Document> Documents => Set<Document>();
 
-        public DmsDbContext(IConfiguration configuration)
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            _configuration = configuration;
-        }
-
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {
-            optionsBuilder.UseNpgsql(_configuration.GetConnectionString("DefaultConnection"));
+            // add entity configurations here later if needed
+            base.OnModelCreating(modelBuilder);
         }
     }
 }
-
