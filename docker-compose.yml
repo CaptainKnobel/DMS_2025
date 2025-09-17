@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   dms_2025:
     image: dms_2025
