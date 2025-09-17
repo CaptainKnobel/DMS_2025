@@ -4,15 +4,16 @@ namespace DMS_2025.REST.DTOs
 {
     public class DocumentCreateRequest
     {
-        [Required, MaxLength(255)]
-        public string FileName { get; set; } = default!;
-        [Required, MaxLength(127)]
-        public string ContentType { get; set; } = default!;
-        [Range(0, long.MaxValue)]
-        public long SizeBytes { get; set; }
+        // Im Model ist Title nicht [Required]; für S1 lasse ich es optional.
         [MaxLength(255)]
         public string? Title { get; set; }
-        [MaxLength(1024)]
-        public string? Tags { get; set; }
+
+        [MaxLength(255)]
+        public string? Location { get; set; }
+
+        public DateTime? CreationDate { get; set; }
+
+        [MaxLength(255)]
+        public string? Author { get; set; }
     }
 }
