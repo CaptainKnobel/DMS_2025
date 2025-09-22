@@ -2,6 +2,8 @@ using DMS_2025.DAL.Context;
 using DMS_2025.DAL.Repositories.EfCore;
 using DMS_2025.DAL.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using DMS_2025.REST;
+using DMS_2025.DAL;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,12 +41,20 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapGet("/", () => "OK");
+//app.MapGet("/", () => "OK");
 
-app.MapGet("/db-ping", async (DmsDbContext db) =>
-{
-    var ok = await db.Database.CanConnectAsync();
-    return Results.Ok(new { canConnect = ok });
-});
+//app.MapGet("/db-ping", async (DmsDbContext db) =>
+//{
+//    var ok = await db.Database.CanConnectAsync();
+//    return Results.Ok(new { canConnect = ok });
+//});
+
+//app.MapGet("/api/v1/documents/{id}", async (Guid id, IDocumentRepository repo, CancellationToken ct) =>
+//{
+//    var doc = await repo.GetAsync(id, ct);
+//    return doc is null ? Results.NotFound() : Results.Ok(doc);
+//});
+
+
 
 app.Run();
