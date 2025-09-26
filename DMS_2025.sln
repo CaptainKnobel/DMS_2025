@@ -3,20 +3,27 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36221.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025", "DMS_2025\DMS_2025.csproj", "{D197FA90-B141-4447-8147-1212C3E186D5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DMS_2025", "DMS_2025\DMS_2025.csproj", "{D197FA90-B141-4447-8147-1212C3E186D5}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
 		docker-compose.yml = docker-compose.yml
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.DAL", "DMS_2025.DAL\DMS_2025.DAL.csproj", "{BDD1094F-E680-4C28-84A9-4F8B5F116464}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DMS_2025.DAL", "DMS_2025.DAL\DMS_2025.DAL.csproj", "{BDD1094F-E680-4C28-84A9-4F8B5F116464}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.Models", "DMS_2025.Models\DMS_2025.Models.csproj", "{80B5AF3A-30DB-4B6F-9CF2-3B161B151690}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DMS_2025.Models", "DMS_2025.Models\DMS_2025.Models.csproj", "{80B5AF3A-30DB-4B6F-9CF2-3B161B151690}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.Tests", "DMS_2025.Tests\DMS_2025.Tests.csproj", "{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DMS_2025.Tests", "DMS_2025.Tests\DMS_2025.Tests.csproj", "{78ADE88F-D427-41B4-A3C5-F8F38E7B64DE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.REST", "DMS_2025.REST\DMS_2025.REST.csproj", "{1A1A1F00-6201-428F-83DD-223EBB24C889}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DMS_2025.REST", "DMS_2025.REST\DMS_2025.REST.csproj", "{1A1A1F00-6201-428F-83DD-223EBB24C889}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "nginx", "nginx", "{1EF29470-AE96-479B-86F7-42819EA78305}"
+	ProjectSection(SolutionItems) = preProject
+		default.conf = default.conf
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.UI", "DMS_2025.UI\DMS_2025.UI.csproj", "{0978B15B-17F4-46D8-8ECF-295D7168E70F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -44,9 +51,16 @@ Global
 		{1A1A1F00-6201-428F-83DD-223EBB24C889}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1A1A1F00-6201-428F-83DD-223EBB24C889}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1A1A1F00-6201-428F-83DD-223EBB24C889}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0978B15B-17F4-46D8-8ECF-295D7168E70F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0978B15B-17F4-46D8-8ECF-295D7168E70F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0978B15B-17F4-46D8-8ECF-295D7168E70F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0978B15B-17F4-46D8-8ECF-295D7168E70F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{1EF29470-AE96-479B-86F7-42819EA78305} = {8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A3CA61BA-A370-48DA-831D-1B7699F0B62B}
