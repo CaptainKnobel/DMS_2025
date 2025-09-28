@@ -54,7 +54,8 @@ services:
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       #- ./nginx:/etc/nginx/conf.d:ro
-      - ./DMS_2025.UI/wwwroot/src:/usr/share/nginx/html:ro
+      #- ./DMS_2025.UI/wwwroot/src:/usr/share/nginx/html:ro
+      - ./DMS_2025.UI/wwwroot:/usr/share/nginx/html:ro
     depends_on:
       - dms_2025
       - paperless

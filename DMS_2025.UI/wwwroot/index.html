@@ -1,0 +1,81 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DMS 2025 – Web UI</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 2rem;
+        }
+
+        form {
+            display: grid;
+            gap: 1rem;
+            max-width: 560px;
+        }
+
+        input, button, textarea {
+            padding: .6rem .8rem;
+        }
+
+        .error {
+            color: #b00020;
+            margin-top: .25rem;
+            font-size: .9rem;
+        }
+
+        .ok {
+            color: #0a7d32;
+        }
+
+        .muted {
+            color: #555;
+            font-size: .9rem;
+        }
+
+        .chip {
+            display: inline-block;
+            padding: .25rem .5rem;
+            border: 1px solid #ddd;
+            border-radius: 999px;
+            margin: .25rem .25rem 0 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>DMS 2025 — Upload document</h1>
+
+    <form id="uploadForm" novalidate>
+        <div>
+            <label for="title">Title (optional, max. 255)</label><br />
+            <input type="text" id="title" name="title" maxlength="255" />
+            <div class="error" data-error-for="title"></div>
+        </div>
+
+        <div>
+            <label for="location">Location (optional, max. 255)</label><br />
+            <input type="text" id="location" name="location" maxlength="255" />
+            <div class="error" data-error-for="location"></div>
+        </div>
+
+        <div>
+            <label for="author">Author (optional, max. 255)</label><br />
+            <input type="text" id="author" name="author" maxlength="255" />
+            <div class="error" data-error-for="author"></div>
+        </div>
+
+        <div>
+            <label for="creationDate">Creation date (optional, ISO)</label><br />
+            <input type="datetime-local" id="creationDate" name="creationDate" />
+            <div class="error" data-error-for="creationDate"></div>
+        </div>
+
+        <button type="submit">Save</button>
+        <div id="status"></div>
+    </form>
+
+    <script src="./app.js"></script>
+</body>
+</html>

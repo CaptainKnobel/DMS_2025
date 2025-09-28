@@ -7,6 +7,8 @@ using DMS_2025.DAL.Repositories.Interfaces; // IDocumentRepository
 using DMS_2025.DAL.Repositories.EfCore;     // DocumentRepository
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
+using DMS_2025.REST.Validation;
 //using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,12 +17,16 @@ var builder = WebApplication.CreateBuilder(args);
 // - Logging
 //builder.Host.UseSerilog((ctx, lc) => lc.ReadFrom.Configuration(ctx.Configuration));
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<FluentValidationActionFilter>();   // <- add our filter once
+});
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddProblemDetails();
 //builder.Services.AddValidatorsFromAssemblyContaining<DocumentCreateValidator>();
+builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
+builder.Services.AddProblemDetails();
 
 // DAL (DbContext + Repos, incl. ConnectionString)
 // DbContext + Repo (Runtime-Registration)
@@ -39,7 +45,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseExceptionHandler(); // exception handler, because you alone can't handle my exceptional programming skills
-
+app.UseStatusCodePages();
 app.UseHttpsRedirection();  // only ok for local
 
 //app.UseAuthorization();
