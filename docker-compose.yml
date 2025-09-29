@@ -9,6 +9,7 @@ services:
         condition: service_healthy
     environment:
       - ConnectionStrings__Default=Host=${POSTGRES_HOST:-postgres};Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - ASPNETCORE_URLS=http://+:8080
     networks:
       - postgres
 
@@ -57,8 +58,8 @@ services:
       #- ./DMS_2025.UI/wwwroot/src:/usr/share/nginx/html:ro
       - ./DMS_2025.UI/wwwroot:/usr/share/nginx/html:ro
     depends_on:
-      - dms_2025
-      - paperless
+      paperless:
+        condition: service_started
     networks:
       - postgres
 
@@ -72,14 +73,21 @@ services:
       PAPERLESS_DBNAME: paperless
       PAPERLESS_DBUSER: paperless
       PAPERLESS_DBPASS: paperlesspw
+      PAPERLESS_REDIS: redis://redis:6379
+      REDIS_URL: redis://redis:6379 
+      PAPERLESS_BIND_ADDR: 0.0.0.0
+      PAPERLESS_PORT: 8000
     depends_on:
-      - paperless-db
+      paperless-db:
+        condition: service_started
+      redis:
+        condition: service_started
     networks:
       - postgres
     restart: unless-stopped
 
   paperless-db:
-    image: postgres:13
+    image: postgres:15-alpine
     environment:
       POSTGRES_DB: paperless
       POSTGRES_USER: paperless
@@ -90,6 +98,17 @@ services:
       - postgres
     restart: unless-stopped
 
+  redis:
+    image: redis:alpine
+    command: [ "redis-server", "--appendonly", "yes" ]
+    networks:
+      - postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 networks:
   postgres:
