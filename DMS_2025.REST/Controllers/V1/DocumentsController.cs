@@ -110,6 +110,51 @@ namespace DMS_2025.REST.Controllers.V1
             return CreatedAtAction(nameof(Get), new { id = dto.Id }, dto);
         }
 
+        [HttpPost("upload")]
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(20L * 1024 * 1024)]
+        public async Task<IActionResult> Upload([FromForm] DocumentUploadRequest req, CancellationToken ct)
+        {
+            // Persist the file to disk (temp for Sprint 2)
+            var uploadsRoot = Path.Combine(Path.GetTempPath(), "dms_uploads");
+            Directory.CreateDirectory(uploadsRoot);
+
+            var extension = Path.GetExtension(req.File.FileName);
+            var storedName = $"{Guid.NewGuid()}{extension}";
+            var fullPath = Path.Combine(uploadsRoot, storedName);
+
+            await using (var fs = System.IO.File.Create(fullPath))
+            {
+                await req.File.CopyToAsync(fs, ct);  // <- real awaited I/O
+            }
+
+            // Persist metadata (let's maybe add a file reference column in the entity later??)
+            var entity = new Document
+            {
+                Id = Guid.NewGuid(),
+                Title = req.Title,
+                Location = req.Location,
+                CreationDate = req.CreationDate ?? DateTime.UtcNow,
+                Author = req.Author
+                // TODO: add e.g. FilePath/StorageKey property to Document later if your schema has it
+            };
+
+            await _repo.AddAsync(entity, ct);
+            await _repo.SaveChangesAsync(ct);
+
+            // Return Created with a DTO
+            var dto = new DocumentResponse
+            {
+                Id = entity.Id,
+                Title = entity.Title,
+                Location = entity.Location,
+                CreationDate = entity.CreationDate,
+                Author = entity.Author
+            };
+
+            return CreatedAtAction(nameof(Get), new { id = dto.Id }, dto);
+        }
+
         /// PUT /api/v1/documents/{id}
         [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] DocumentUpdateRequest req, CancellationToken ct)

@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using FluentValidation;
 using DMS_2025.REST.Validation;
+using Microsoft.AspNetCore.Http.Features;
 //using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,7 +28,10 @@ builder.Services.AddSwaggerGen();
 //builder.Services.AddValidatorsFromAssemblyContaining<DocumentCreateValidator>();
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 builder.Services.AddProblemDetails();
-
+builder.Services.Configure<FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = 20L * 1024 * 1024; // 20 MB
+});
 // DAL (DbContext + Repos, incl. ConnectionString)
 // DbContext + Repo (Runtime-Registration)
 var cs = builder.Configuration.GetConnectionString("Default")

@@ -49,6 +49,12 @@
 
     <form id="uploadForm" novalidate>
         <div>
+            <label for="file">File (PDF/PNG/JPG/TIFF, ≤ 20MB)</label><br />
+            <input type="file" id="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" required />
+            <div class="error" data-error-for="file"></div>
+        </div>
+
+        <div>
             <label for="title">Title (optional, max. 255)</label><br />
             <input type="text" id="title" name="title" maxlength="255" />
             <div class="error" data-error-for="title"></div>
@@ -67,12 +73,12 @@
         </div>
 
         <div>
-            <label for="creationDate">Creation date (optional, ISO)</label><br />
+            <label for="creationDate">Creation date (optional)</label><br />
             <input type="datetime-local" id="creationDate" name="creationDate" />
             <div class="error" data-error-for="creationDate"></div>
         </div>
 
-        <button type="submit">Save</button>
+        <button type="submit">Upload</button>
         <div id="status"></div>
     </form>
 
