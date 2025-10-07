@@ -59,15 +59,17 @@ services:
       #- ./DMS_2025.UI/wwwroot/src:/usr/share/nginx/html:ro
       - ./DMS_2025.UI/wwwroot:/usr/share/nginx/html:ro
     depends_on:
-      paperless:
-        condition: service_started
+        dms_2025:
+            condition: service_started
+        paperless:
+            condition: service_started
     networks:
       - postgres
 
   paperless:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
-    ports:
-      - "8000:8000"
+    #ports:
+     # - "8000:8000"
     environment:
       PAPERLESS_SECRET_KEY: example123
       PAPERLESS_DBHOST: paperless-db
