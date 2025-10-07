@@ -1,6 +1,0 @@
-@DMS_2025.REST_HostAddress = http://localhost:5062
-
-GET {{DMS_2025.REST_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
