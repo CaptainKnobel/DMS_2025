@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36221.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DMS_2025", "DMS_2025\DMS_2025.csproj", "{D197FA90-B141-4447-8147-1212C3E186D5}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
 		docker-compose.yml = docker-compose.yml
@@ -19,9 +17,6 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DMS_2025.REST", "DMS_2025.REST\DMS_2025.REST.csproj", "{1A1A1F00-6201-428F-83DD-223EBB24C889}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "nginx", "nginx", "{1EF29470-AE96-479B-86F7-42819EA78305}"
-	ProjectSection(SolutionItems) = preProject
-		default.conf = default.conf
-	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DMS_2025.UI", "DMS_2025.UI\DMS_2025.UI.csproj", "{0978B15B-17F4-46D8-8ECF-295D7168E70F}"
 EndProject
@@ -31,10 +26,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{D197FA90-B141-4447-8147-1212C3E186D5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D197FA90-B141-4447-8147-1212C3E186D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D197FA90-B141-4447-8147-1212C3E186D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D197FA90-B141-4447-8147-1212C3E186D5}.Release|Any CPU.Build.0 = Release|Any CPU
 		{BDD1094F-E680-4C28-84A9-4F8B5F116464}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{BDD1094F-E680-4C28-84A9-4F8B5F116464}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BDD1094F-E680-4C28-84A9-4F8B5F116464}.Release|Any CPU.ActiveCfg = Release|Any CPU

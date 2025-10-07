@@ -3,13 +3,14 @@ services:
     image: dms_2025
     build:
       context: .
-      dockerfile: DMS_2025/Dockerfile
+      dockerfile: DMS_2025.REST/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development          # Swagger + Migrate() active ... overrides the JSONs
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__Default=Host=${POSTGRES_HOST:-postgres};Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      - ConnectionStrings__Default=Host=${POSTGRES_HOST:-postgres};Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      - ASPNETCORE_URLS=http://+:8080
     networks:
       - postgres
 

@@ -11,6 +11,7 @@ using FluentValidation;
 using DMS_2025.REST.Validation;
 using Microsoft.AspNetCore.Http.Features;
 //using Serilog;
+using DMS_2025.DAL;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,7 +36,8 @@ builder.Services.Configure<FormOptions>(o =>
 // DAL (DbContext + Repos, incl. ConnectionString)
 // DbContext + Repo (Runtime-Registration)
 var cs = builder.Configuration.GetConnectionString("Default")
-    ?? Environment.GetEnvironmentVariable("ConnectionStrings__Default"); // ToDo: connection string fixen, der richtige müsste aus DAL kommen
+    ?? Environment.GetEnvironmentVariable("ConnectionStrings__Default")
+    ?? "Host=localhost;Port=5432;Database=dms_db;Username=postgres;Password=postgres";
 builder.Services.AddDbContext<DmsDbContext>(opt => opt.UseNpgsql(cs));
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 
@@ -46,22 +48,48 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<DmsDbContext>();
+    db.Database.Migrate(); // makes sure schema is up to date
 }
 
 app.UseExceptionHandler(); // exception handler, because you alone can't handle my exceptional programming skills
 app.UseStatusCodePages();
-app.UseHttpsRedirection();  // only ok for local
+//app.UseHttpsRedirection();  // only ok for local
 
 //app.UseAuthorization();
 
 app.MapControllers();
+//app.MapGet("/", () => "OK");
+
+//app.MapGet("/db-ping", async (DmsDbContext db) =>
+//{
+//    var ok = await db.Database.CanConnectAsync();
+//    return Results.Ok(new { canConnect = ok });
+//});
+
+//app.MapGet("/api/v1/documents/{id}", async (Guid id, IDocumentRepository repo, CancellationToken ct) =>
+//{
+//    var doc = await repo.GetAsync(id, ct);
+//    return doc is null ? Results.NotFound() : Results.Ok(doc);
+//});
 
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy" })); // i'm sick rn so it'd be good if at least one of us is healthy ...
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<DmsDbContext>();
-    db.Database.Migrate();
-}
-
 app.Run();
+// ^ v !only one! v ^
+//await app.RunAsync();
+
+
+
+
+/*
+Submission - Sprint 1: Project-Setup, REST API, DAL (Due: Wednesday, 17 September 2025, 11:59 PM) Assignment
+Submission - Sprint 2: Web-UI (Due: Monday, 29 September 2025, 2:00 PM) Assignment
+Submission - Sprint 3: Queuing (Due: Wednesday, 8 October 2025, 11:59 PM) Assignment
+Submission - Sprint 4: Workers, MinIO, OCR (Due: Monday, 3 November 2025, 2:00 PM) Assignment
+Submission - Sprint 5: GenAI (Due: Monday, 17 November 2025, 2:00 PM) Assignment
+Submission - Sprint 6: ELK, Use Cases (Monday, 15 December 2025, 2:00 PM) Assignment
+Submission - Sprint 7: Integration-Test, Batch (Due: Sunday, 18 January 2026, 11:59 PM) 
+*/
