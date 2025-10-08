@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DMS_2025.DAL.Migrations
 {
     [DbContext(typeof(DmsDbContext))]
-    [Migration("20251007121340_InitialCreate")]
+    [Migration("20251008185031_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -34,10 +34,22 @@ namespace DMS_2025.DAL.Migrations
                     b.Property<string>("Author")
                         .HasColumnType("text");
 
+                    b.Property<string>("ContentType")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("CreationDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("FilePath")
+                        .HasColumnType("text");
+
+                    b.Property<long?>("FileSize")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Location")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OriginalFileName")
                         .HasColumnType("text");
 
                     b.Property<string>("Title")

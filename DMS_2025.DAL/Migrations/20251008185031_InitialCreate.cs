@@ -19,7 +19,11 @@ namespace DMS_2025.DAL.Migrations
                     Title = table.Column<string>(type: "text", nullable: true),
                     Location = table.Column<string>(type: "text", nullable: true),
                     CreationDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    Author = table.Column<string>(type: "text", nullable: true)
+                    Author = table.Column<string>(type: "text", nullable: true),
+                    FilePath = table.Column<string>(type: "text", nullable: true),
+                    OriginalFileName = table.Column<string>(type: "text", nullable: true),
+                    ContentType = table.Column<string>(type: "text", nullable: true),
+                    FileSize = table.Column<long>(type: "bigint", nullable: true)
                 },
                 constraints: table =>
                 {

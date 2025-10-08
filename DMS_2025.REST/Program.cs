@@ -90,8 +90,7 @@ var uploadRoot = builder.Configuration["FileStorage:Root"]
 Directory.CreateDirectory(uploadRoot);
 builder.Services.AddSingleton(new UploadRoot(uploadRoot));
 
-
-// ----- build
+// =====----- build -----=====
 var app = builder.Build();
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions
