@@ -1,36 +1,80 @@
 ﻿<!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DMS 2025 – Web UI - Document Upload</title>
-    <!-- Bootstrap -->
+
+    <!-- Theme bootstrap (set as early as possible to avoid FOUC) -->
+    <script>
+        (function () {
+            const saved = localStorage.getItem('theme');           // 'light' | 'dark' | null
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const initial = saved ?? (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-bs-theme', initial);
+        })();
+    </script>
+
+    <!-- Bootstrap & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    
     <style>
+        /* sanfte Blue-Akzente im Dark Mode */
+        [data-bs-theme="dark"] {
+            color-scheme: dark;
+            --bs-body-bg: #0e1424;          /* navy-tinted Hintergrund */
+            --bs-body-color: #e6ecf5;
+            --bs-border-color: #223251;
+            --bs-card-bg: #121a30;          /* Karten leicht abgesetzt */
+            --bs-tertiary-bg: #0b1326;
+            --bs-primary: #6ea8fe;          /* Primärfarbe soft-blue */
+            --bs-primary-rgb: 110,168,254;
+            --bs-link-color: #8bb9ff;       /* Links minimal heller */
+            --bs-link-hover-color: #bcd6ff;
+        }
+
         .dropzone {
             border: 2px dashed var(--bs-border-color);
             border-radius: .75rem;
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
         }
 
             .dropzone.drag {
-                background: rgba(13,110,253,.06);
-                border-color: #0d6efd;
+                background: rgba(var(--bs-primary-rgb), .07);
+                border-color: rgba(var(--bs-primary-rgb), .85);
+                box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .15);
             }
 
             .dropzone.invalid {
                 border-color: var(--bs-danger);
-                background: rgba(220,53,69,.05);
+                background: rgba(var(--bs-danger-rgb), .08);
             }
     </style>
 </head>
 <body class="bg-body-tertiary">
+    <header class="border-bottom sticky-top" style="backdrop-filter:saturate(140%) blur(4px);">
+        <div class="container d-flex align-items-center py-2 gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-cloud-arrow-up-fill text-primary fs-4"></i>
+                <strong class="fs-5">DMS 2025</strong>
+                <span class="text-secondary">Document Upload</span>
+            </div>
+            <div class="ms-auto">
+                <button id="themeToggle" class="btn btn-sm btn-outline-primary" type="button"
+                        aria-label="Toggle theme (light/dark)">
+                    <i class="bi bi-moon-stars" id="themeIcon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
     <main class="container py-4">
         <div class="row g-4">
             <div class="col-lg-8">
                 <div class="card shadow-sm">
-                    <div class="card-header bg-white">
-                        <h1 class="h5 mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Upload document</h1>
+                    <div class="card-header bg-transparent">
+                        <h1 class="h5 mb-0"><i class="bi bi-upload me-2"></i>Upload document</h1>
                     </div>
                     <div class="card-body">
                         <div id="alert" class="alert d-none" role="alert"></div>
@@ -77,7 +121,7 @@
                             <!-- Progress -->
                             <div class="mb-3">
                                 <div class="progress" role="progressbar" aria-label="Upload progress">
-                                    <div id="bar" class="progress-bar" style="width:0%"></div>
+                                    <div id="bar" class="progress-bar bg-primary" style="width:0%"></div>
                                 </div>
                             </div>
 
@@ -97,7 +141,7 @@
             <!-- Side info -->
             <div class="col-lg-4">
                 <div class="card shadow-sm">
-                    <div class="card-header bg-white"><h2 class="h6 mb-0">Info</h2></div>
+                    <div class="card-header bg-transparent"><h2 class="h6 mb-0">Info</h2></div>
                     <div class="card-body small text-secondary">
                         <ul class="mb-0">
                             <li>API base: <code>/api/v1</code> (via Nginx)</li>
@@ -110,7 +154,30 @@
         </div>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+
+    <!-- Theme toggle logic -->
+    <script>
+        (function () {
+            const btn = document.getElementById('themeToggle');
+            const icon = document.getElementById('themeIcon');
+
+            function isDark() {
+                return document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            }
+            function renderIcon() {
+                icon.className = 'bi ' + (isDark() ? 'bi-brightness-high' : 'bi-moon-stars');
+            }
+            btn.addEventListener('click', () => {
+                const next = isDark() ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-bs-theme', next);
+                localStorage.setItem('theme', next);
+                renderIcon();
+            });
+            renderIcon();
+        })();
+    </script>
+
     <script src="./app.js"></script>
 </body>
 </html>

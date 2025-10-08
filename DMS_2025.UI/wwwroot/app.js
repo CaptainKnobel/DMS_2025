@@ -1,7 +1,9 @@
 ﻿(() => {
-    // const API_BASE = '/api/v1';  // (nginx/compose)
-    // const API_BASE = 'http://localhost:5062/api/v1'; // (local no-proxy, no nginx)
-    const API_BASE = '/api/v1';
+    const API_BASE = (() => {
+        const p = window.location;
+        const runningBehindNginx = p.port === '8081' || p.pathname.startsWith('/ui/');
+        return runningBehindNginx ? '/api/v1' : 'http://localhost:8081/api/v1';
+    })();
 
     // Elements
     const form = document.getElementById('uploadForm');
