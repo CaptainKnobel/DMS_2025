@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Mime;
-using System.Threading;
-using System.Threading.Tasks;
-using DMS_2025.DAL.Repositories.Interfaces;
+﻿using DMS_2025.DAL.Repositories.Interfaces;
 using DMS_2025.Models;
+using DMS_2025.REST;
 using DMS_2025.REST.Controllers.V1;
 using DMS_2025.REST.DTOs;
 using DMS_2025.REST.Messaging;
@@ -14,6 +8,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using NUnit.Framework;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Mime;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DMS_2025.Tests.REST
 {
@@ -22,13 +23,19 @@ namespace DMS_2025.Tests.REST
         private Mock<IDocumentRepository> _repo = null!;
         private Mock<IEventPublisher> _pub = null!;
         private DocumentsController _ctrl = null!;
+        private string _tmpDir = null!;
 
         [SetUp]
         public void SetUp()
         {
             _repo = new Mock<IDocumentRepository>(MockBehavior.Strict);
             _pub = new Mock<IEventPublisher>(MockBehavior.Strict);
-            _ctrl = new DocumentsController(_repo.Object, _pub.Object);
+
+            _tmpDir = Path.Combine(Path.GetTempPath(), "dms_tests_" + Guid.NewGuid());
+            Directory.CreateDirectory(_tmpDir);
+
+            var root = new UploadRoot(_tmpDir);
+            _ctrl = new DocumentsController(_repo.Object, _pub.Object, root);
         }
 
         [TearDown]
@@ -36,6 +43,8 @@ namespace DMS_2025.Tests.REST
         {
             _repo.VerifyNoOtherCalls();
             _pub.VerifyNoOtherCalls();
+            try { if (Directory.Exists(_tmpDir)) Directory.Delete(_tmpDir, true); }
+            catch { /* egal im Test :) */ }
         }
 
         [Test]
@@ -131,12 +140,19 @@ namespace DMS_2025.Tests.REST
         public async Task Delete_Deletes_And_Returns_204()
         {
             var id = Guid.NewGuid();
-            _repo.Setup(r => r.DeleteAsync(id, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-            _repo.Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+            _repo.Setup(r => r.GetAsync(id, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Document { Id = id, FilePath = null });
+
+            _repo.Setup(r => r.DeleteAsync(id, It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+
+            _repo.Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(1);
 
             var res = await _ctrl.Delete(id, CancellationToken.None);
 
             Assert.That(res, Is.InstanceOf<NoContentResult>());
+            _repo.Verify(r => r.GetAsync(id, It.IsAny<CancellationToken>()), Times.Once);
             _repo.Verify(r => r.DeleteAsync(id, It.IsAny<CancellationToken>()), Times.Once);
             _repo.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         }
