@@ -10,14 +10,19 @@ using Microsoft.AspNetCore.Mvc;
 using FluentValidation;
 using DMS_2025.REST.Validation;
 using Microsoft.AspNetCore.Http.Features;
-//using Serilog;
+using Serilog;
 using DMS_2025.DAL;
+using DMS_2025.REST.Messaging;
+using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // - Logging
-//builder.Host.UseSerilog((ctx, lc) => lc.ReadFrom.Configuration(ctx.Configuration));
+builder.Host.UseSerilog((ctx, lc) => lc
+    .ReadFrom.Configuration(ctx.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console());
 
 builder.Services.AddControllers(options =>
 {
@@ -41,6 +46,25 @@ var cs = builder.Configuration.GetConnectionString("Default")
 builder.Services.AddDbContext<DmsDbContext>(opt => opt.UseNpgsql(cs));
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 
+// ----- RabbitMQ -----
+builder.Services.AddSingleton(sp =>
+{
+    var uri = builder.Configuration["RabbitMQ:Uri"]
+        ?? Environment.GetEnvironmentVariable("RABBITMQ__URI")
+        ?? "amqp://guest:guest@rabbitmq:5672";
+    var factory = new ConnectionFactory {
+        Uri = new Uri(uri),
+        AutomaticRecoveryEnabled = true,
+        TopologyRecoveryEnabled = true,                     // (re-declare queues, QoS, consumer)
+        NetworkRecoveryInterval = TimeSpan.FromSeconds(10),
+        RequestedHeartbeat = TimeSpan.FromSeconds(30),      // hilft Timeouts
+        ClientProvidedName = "dms_2025-rest"                // schöner im RMQ UI
+    };
+    return factory.CreateConnection();
+});
+builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+
+// ----- build
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

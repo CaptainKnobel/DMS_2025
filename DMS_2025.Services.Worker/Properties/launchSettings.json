@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "DMS_2025.Services.Worker": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}

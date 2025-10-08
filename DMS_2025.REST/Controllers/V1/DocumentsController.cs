@@ -1,7 +1,9 @@
 ﻿using DMS_2025.DAL.Repositories.Interfaces; // IDocumentRepository
 using DMS_2025.Models;                       // Document (Entity)
 using DMS_2025.REST.DTOs;
+using DMS_2025.REST.Messaging;
 using Microsoft.AspNetCore.Mvc;
+//using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace DMS_2025.REST.Controllers.V1
@@ -12,7 +14,13 @@ namespace DMS_2025.REST.Controllers.V1
     public class DocumentsController : ControllerBase
     {
         private readonly IDocumentRepository _repo;
-        public DocumentsController(IDocumentRepository repo) => _repo = repo;
+        private readonly IEventPublisher _pub;
+        public DocumentsController(IDocumentRepository repo, IEventPublisher pub) // => (_repo, _pub) = (repo, pub);
+        {
+            _repo = repo;
+            _pub = pub;
+        }
+
 
         /// GET /api/v1/documents?page=&pageSize=&q=&sort=
         [HttpGet]
@@ -97,6 +105,7 @@ namespace DMS_2025.REST.Controllers.V1
 
             await _repo.AddAsync(entity, ct);
             await _repo.SaveChangesAsync(ct); // WICHTIG
+            await _pub.PublishDocumentCreatedAsync(entity, ct);
 
             var dto = new DocumentResponse
             {
@@ -141,6 +150,7 @@ namespace DMS_2025.REST.Controllers.V1
 
             await _repo.AddAsync(entity, ct);
             await _repo.SaveChangesAsync(ct);
+            await _pub.PublishDocumentCreatedAsync(entity, ct);
 
             // Return Created with a DTO
             var dto = new DocumentResponse
