@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Serilog;
 using DMS_2025.DAL;
+using DMS_2025.REST;
 using DMS_2025.REST.Messaging;
 using RabbitMQ.Client;
 
@@ -82,6 +83,13 @@ builder.Services.AddSingleton(sp =>
     return factory.CreateConnection();
 });
 builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+
+// --- File storage root (configurable) ---
+var uploadRoot = builder.Configuration["FileStorage:Root"]
+    ?? Path.Combine(Path.GetTempPath(), "dms_uploads");
+Directory.CreateDirectory(uploadRoot);
+builder.Services.AddSingleton(new UploadRoot(uploadRoot));
+
 
 // ----- build
 var app = builder.Build();

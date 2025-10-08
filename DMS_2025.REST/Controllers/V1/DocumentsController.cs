@@ -3,6 +3,7 @@ using DMS_2025.Models;                       // Document (Entity)
 using DMS_2025.REST.DTOs;
 using DMS_2025.REST.Messaging;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 //using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,10 +16,36 @@ namespace DMS_2025.REST.Controllers.V1
     {
         private readonly IDocumentRepository _repo;
         private readonly IEventPublisher _pub;
-        public DocumentsController(IDocumentRepository repo, IEventPublisher pub) // => (_repo, _pub) = (repo, pub);
+        private readonly string _root;
+        public DocumentsController(IDocumentRepository repo, IEventPublisher pub, UploadRoot root) // => (_repo, _pub, _root) = (repo, pub, root);
         {
             _repo = repo;
             _pub = pub;
+            _root = Path.GetFullPath(root.Path);
+            Directory.CreateDirectory(_root);
+        }
+
+        // ----- Helper
+        private string SaveFile(IFormFile file)
+        {
+            var ext = Path.GetExtension(file.FileName);
+            var stored = $"{Guid.NewGuid()}{ext}".ToLowerInvariant();
+            var full = Path.GetFullPath(Path.Combine(_root, stored));
+
+            if (!full.StartsWith(_root, StringComparison.Ordinal))
+                throw new InvalidOperationException("Unsafe path.");
+
+            using var fs = System.IO.File.Create(full);
+            file.CopyTo(fs);
+            return full;
+        }
+
+        private void SafeDelete(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            var full = Path.GetFullPath(path);
+            if (full.StartsWith(_root, StringComparison.Ordinal) && System.IO.File.Exists(full))
+                System.IO.File.Delete(full);
         }
 
 
@@ -101,15 +128,16 @@ namespace DMS_2025.REST.Controllers.V1
         public async Task<IActionResult> Download(Guid id, CancellationToken ct)
         {
             var d = await _repo.GetAsync(id, ct);
-            if (d is null) return NotFound();
-            if (string.IsNullOrWhiteSpace(d.FilePath) || !System.IO.File.Exists(d.FilePath))
+            if (d is null || string.IsNullOrWhiteSpace(d.FilePath) || !System.IO.File.Exists(d.FilePath))
+            {
                 return NotFound();
+            }
 
-            var stream = System.IO.File.OpenRead(d.FilePath);
+            var stream = System.IO.File.OpenRead(d.FilePath); // TODO: maybe remove?
             var contentType = string.IsNullOrWhiteSpace(d.ContentType) ? "application/octet-stream" : d.ContentType;
             var downloadName = string.IsNullOrWhiteSpace(d.OriginalFileName) ? Path.GetFileName(d.FilePath) : d.OriginalFileName;
 
-            return File(stream, contentType, downloadName, enableRangeProcessing: true);
+            return File(stream, contentType, downloadName, enableRangeProcessing: true); // TODO: maybe: return PhysicalFile(d.FilePath, contentType, downloadName, enableRangeProcessing: true);
         }
 
         /// POST /api/v1/documents
@@ -135,7 +163,10 @@ namespace DMS_2025.REST.Controllers.V1
                 Title = entity.Title,
                 Location = entity.Location,
                 CreationDate = entity.CreationDate,
-                Author = entity.Author
+                Author = entity.Author,
+                HasFile = !string.IsNullOrWhiteSpace(entity.FilePath),
+                FileSize = entity.FileSize,
+                OriginalFileName = entity.OriginalFileName
             };
 
             return CreatedAtAction(nameof(Get), new { id = dto.Id }, dto);
@@ -147,19 +178,9 @@ namespace DMS_2025.REST.Controllers.V1
         [RequestSizeLimit(20L * 1024 * 1024)]
         public async Task<IActionResult> Upload([FromForm] DocumentUploadRequest req, CancellationToken ct)
         {
-            // TODO: replace sprint2 temp solution
+            // TODO: replace sprint2+3 temp solution
             // Persist the file to disk (temp for Sprint 2)
-            var uploadsRoot = Path.Combine(Path.GetTempPath(), "dms_uploads");
-            Directory.CreateDirectory(uploadsRoot);
-
-            var extension = Path.GetExtension(req.File.FileName);
-            var storedName = $"{Guid.NewGuid()}{extension}";
-            var fullPath = Path.Combine(uploadsRoot, storedName);
-
-            await using (var fs = System.IO.File.Create(fullPath))
-            {
-                await req.File.CopyToAsync(fs, ct);  // <- real awaited I/O
-            }
+            var fullPath = SaveFile(req.File);
 
             // Persist metadata (let's maybe add a file reference column in the entity later??)
             var entity = new Document
@@ -181,19 +202,17 @@ namespace DMS_2025.REST.Controllers.V1
             await _pub.PublishDocumentCreatedAsync(entity, ct);
 
             // Return Created with a DTO
-            var dto = new DocumentResponse
+            return CreatedAtAction(nameof(Get), new { id = entity.Id }, new DocumentResponse
             {
                 Id = entity.Id,
                 Title = entity.Title,
                 Location = entity.Location,
                 CreationDate = entity.CreationDate,
                 Author = entity.Author,
-                HasFile = entity.FilePath != null,
+                HasFile = true,
                 FileSize = entity.FileSize,
                 OriginalFileName = entity.OriginalFileName
-            };
-
-            return CreatedAtAction(nameof(Get), new { id = dto.Id }, dto);
+            });
         }
 
         /// PUT /api/v1/documents/{id}
@@ -225,18 +244,8 @@ namespace DMS_2025.REST.Controllers.V1
             if (d is null) return NotFound();
 
             // altes File löschen
-            if (!string.IsNullOrWhiteSpace(d.FilePath) && System.IO.File.Exists(d.FilePath))
-                System.IO.File.Delete(d.FilePath);
-
-            var uploadsRoot = Path.Combine(Path.GetTempPath(), "dms_uploads");
-            Directory.CreateDirectory(uploadsRoot);
-
-            var ext = Path.GetExtension(file.FileName);
-            var storedName = $"{Guid.NewGuid()}{ext}";
-            var fullPath = Path.Combine(uploadsRoot, storedName);
-
-            await using (var fs = System.IO.File.Create(fullPath))
-                await file.CopyToAsync(fs, ct);
+            SafeDelete(d.FilePath);
+            var fullPath = SaveFile(file);
 
             d.FilePath = fullPath;
             d.OriginalFileName = file.FileName;
@@ -257,8 +266,9 @@ namespace DMS_2025.REST.Controllers.V1
             if (d is null) return NoContent();
 
             if (!string.IsNullOrWhiteSpace(d.FilePath) && System.IO.File.Exists(d.FilePath))
-                System.IO.File.Delete(d.FilePath);
-
+            {
+                SafeDelete(d.FilePath);
+            }
             await _repo.DeleteAsync(id, ct);
             await _repo.SaveChangesAsync(ct);
             return NoContent();
@@ -271,7 +281,9 @@ namespace DMS_2025.REST.Controllers.V1
             if (d is null) return NotFound();
 
             if (!string.IsNullOrWhiteSpace(d.FilePath) && System.IO.File.Exists(d.FilePath))
-                System.IO.File.Delete(d.FilePath);
+            {
+                SafeDelete(d.FilePath);
+            }
 
             d.FilePath = null;
             d.OriginalFileName = null;
