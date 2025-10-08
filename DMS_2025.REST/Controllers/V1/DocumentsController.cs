@@ -67,7 +67,10 @@ namespace DMS_2025.REST.Controllers.V1
                 Title = d.Title,
                 Location = d.Location,
                 CreationDate = d.CreationDate,
-                Author = d.Author
+                Author = d.Author,
+                HasFile = !string.IsNullOrWhiteSpace(d.FilePath),
+                FileSize = d.FileSize,
+                OriginalFileName = d.OriginalFileName
             });
 
             return Ok(result);
@@ -86,8 +89,27 @@ namespace DMS_2025.REST.Controllers.V1
                     Title = d.Title,
                     Location = d.Location,
                     CreationDate = d.CreationDate,
-                    Author = d.Author
+                    Author = d.Author,
+                    HasFile = !string.IsNullOrWhiteSpace(d.FilePath),
+                    FileSize = d.FileSize,
+                    OriginalFileName = d.OriginalFileName
                 });
+        }
+
+        // Download
+        [HttpGet("{id:guid}/file")]
+        public async Task<IActionResult> Download(Guid id, CancellationToken ct)
+        {
+            var d = await _repo.GetAsync(id, ct);
+            if (d is null) return NotFound();
+            if (string.IsNullOrWhiteSpace(d.FilePath) || !System.IO.File.Exists(d.FilePath))
+                return NotFound();
+
+            var stream = System.IO.File.OpenRead(d.FilePath);
+            var contentType = string.IsNullOrWhiteSpace(d.ContentType) ? "application/octet-stream" : d.ContentType;
+            var downloadName = string.IsNullOrWhiteSpace(d.OriginalFileName) ? Path.GetFileName(d.FilePath) : d.OriginalFileName;
+
+            return File(stream, contentType, downloadName, enableRangeProcessing: true);
         }
 
         /// POST /api/v1/documents
@@ -119,11 +141,13 @@ namespace DMS_2025.REST.Controllers.V1
             return CreatedAtAction(nameof(Get), new { id = dto.Id }, dto);
         }
 
+        // upload
         [HttpPost("upload")]
         [Consumes("multipart/form-data")]
         [RequestSizeLimit(20L * 1024 * 1024)]
         public async Task<IActionResult> Upload([FromForm] DocumentUploadRequest req, CancellationToken ct)
         {
+            // TODO: replace sprint2 temp solution
             // Persist the file to disk (temp for Sprint 2)
             var uploadsRoot = Path.Combine(Path.GetTempPath(), "dms_uploads");
             Directory.CreateDirectory(uploadsRoot);
@@ -144,8 +168,12 @@ namespace DMS_2025.REST.Controllers.V1
                 Title = req.Title,
                 Location = req.Location,
                 CreationDate = req.CreationDate ?? DateTime.UtcNow,
-                Author = req.Author
-                // TODO: add e.g. FilePath/StorageKey property to Document later if your schema has it
+                Author = req.Author,
+                FilePath = fullPath,
+                OriginalFileName = req.File.FileName,
+                ContentType = req.File.ContentType,
+                FileSize = req.File.Length
+                // TODO: add e.g. StorageKey property to Document later if the schema gets it
             };
 
             await _repo.AddAsync(entity, ct);
@@ -159,7 +187,10 @@ namespace DMS_2025.REST.Controllers.V1
                 Title = entity.Title,
                 Location = entity.Location,
                 CreationDate = entity.CreationDate,
-                Author = entity.Author
+                Author = entity.Author,
+                HasFile = entity.FilePath != null,
+                FileSize = entity.FileSize,
+                OriginalFileName = entity.OriginalFileName
             };
 
             return CreatedAtAction(nameof(Get), new { id = dto.Id }, dto);
@@ -183,12 +214,73 @@ namespace DMS_2025.REST.Controllers.V1
             return NoContent();
         }
 
+        [HttpPut("{id:guid}/file")]
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(20L * 1024 * 1024)]
+        public async Task<IActionResult> ReplaceFile(Guid id, [FromForm] IFormFile file, CancellationToken ct)
+        {
+            if (file is null) return BadRequest(new { error = "file is required" });
+
+            var d = await _repo.GetAsync(id, ct);
+            if (d is null) return NotFound();
+
+            // altes File löschen
+            if (!string.IsNullOrWhiteSpace(d.FilePath) && System.IO.File.Exists(d.FilePath))
+                System.IO.File.Delete(d.FilePath);
+
+            var uploadsRoot = Path.Combine(Path.GetTempPath(), "dms_uploads");
+            Directory.CreateDirectory(uploadsRoot);
+
+            var ext = Path.GetExtension(file.FileName);
+            var storedName = $"{Guid.NewGuid()}{ext}";
+            var fullPath = Path.Combine(uploadsRoot, storedName);
+
+            await using (var fs = System.IO.File.Create(fullPath))
+                await file.CopyToAsync(fs, ct);
+
+            d.FilePath = fullPath;
+            d.OriginalFileName = file.FileName;
+            d.ContentType = file.ContentType;
+            d.FileSize = file.Length;
+
+            await _repo.UpdateAsync(d, ct);
+            await _repo.SaveChangesAsync(ct);
+
+            return NoContent();
+        }
+
         /// DELETE /api/v1/documents/{id}
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
         {
+            var d = await _repo.GetAsync(id, ct);
+            if (d is null) return NoContent();
+
+            if (!string.IsNullOrWhiteSpace(d.FilePath) && System.IO.File.Exists(d.FilePath))
+                System.IO.File.Delete(d.FilePath);
+
             await _repo.DeleteAsync(id, ct);
-            await _repo.SaveChangesAsync(ct); // WICHTIG
+            await _repo.SaveChangesAsync(ct);
+            return NoContent();
+        }
+
+        [HttpDelete("{id:guid}/file")]
+        public async Task<IActionResult> DeleteFile(Guid id, CancellationToken ct)
+        {
+            var d = await _repo.GetAsync(id, ct);
+            if (d is null) return NotFound();
+
+            if (!string.IsNullOrWhiteSpace(d.FilePath) && System.IO.File.Exists(d.FilePath))
+                System.IO.File.Delete(d.FilePath);
+
+            d.FilePath = null;
+            d.OriginalFileName = null;
+            d.ContentType = null;
+            d.FileSize = null;
+
+            await _repo.UpdateAsync(d, ct);
+            await _repo.SaveChangesAsync(ct);
+
             return NoContent();
         }
     }

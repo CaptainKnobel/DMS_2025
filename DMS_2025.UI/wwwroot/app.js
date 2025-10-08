@@ -138,6 +138,7 @@
                 setProgress(100); setStatus('Upload successful.');
                 showAlert('Upload successful.', 'success');
                 form.reset(); updateMeta(null);
+                loadDocs();
                 return;
             }
 
@@ -176,4 +177,83 @@
     btnReset.addEventListener('click', () => {
         clearFieldErrors(); hideAlert(); setStatus(''); setProgress(0); updateMeta(null);
     });
+
+    // more CRUD stuff
+    async function loadDocs() {
+        const res = await fetch(`${API_BASE}/documents?page=1&pageSize=50`);
+        const rows = await res.json();
+        const tbody = document.querySelector('#docsTable tbody');
+        tbody.innerHTML = '';
+        rows.forEach(doc => {
+            const tr = document.createElement('tr');
+            const tdTitle = document.createElement('td');
+            tdTitle.textContent = doc.title ?? '';
+            tr.appendChild(tdTitle);
+
+            const tdAuthor = document.createElement('td');
+            tdAuthor.textContent = doc.author ?? '';
+            tr.appendChild(tdAuthor);
+
+            const tdCreated = document.createElement('td');
+            tdCreated.textContent = doc.creationDate ? new Date(doc.creationDate).toLocaleString() : '';
+            tr.appendChild(tdCreated);
+
+            const tdFile = document.createElement('td');
+            tdFile.textContent = doc.hasFile
+                ? `${doc.originalFileName ?? 'file'} (${((doc.fileSize ?? 0) / 1024) | 0} KB)`
+                : '—';
+            tr.appendChild(tdFile);
+
+            const tdActions = document.createElement('td');
+            tdActions.className = 'text-nowrap';
+
+            const aDl = document.createElement('a');
+            aDl.className = 'btn btn-sm btn-outline-primary me-2';
+            aDl.href = `${API_BASE}/documents/${doc.id}/file`;
+            aDl.target = '_blank';
+            aDl.rel = 'noopener';
+            aDl.innerHTML = '<i class="bi bi-download"></i> Download';
+            if (!doc.hasFile) aDl.classList.add('disabled');
+            tdActions.appendChild(aDl);
+
+            const label = document.createElement('label');
+            label.className = 'btn btn-sm btn-outline-warning me-2 mb-0';
+            label.innerHTML = '<i class="bi bi-arrow-repeat"></i> Replace';
+            if (!doc.hasFile) label.classList.add('disabled');
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.className = 'd-none';
+            input.addEventListener('change', () => replaceFile(doc.id, input.files[0]));
+            label.appendChild(input);
+            tdActions.appendChild(label);
+
+            const btnDel = document.createElement('button');
+            btnDel.className = 'btn btn-sm btn-outline-danger';
+            btnDel.innerHTML = '<i class="bi bi-trash"></i> Delete';
+            btnDel.addEventListener('click', () => deleteDoc(doc.id));
+            tdActions.appendChild(btnDel);
+
+            tr.appendChild(tdActions);
+            tbody.appendChild(tr);
+        });
+    }
+
+    window.replaceFile = async (id, file) => {
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(`${API_BASE}/documents/${id}/file`, { method: 'PUT', body: fd });
+        if (res.ok) { loadDocs(); showAlert('File replaced.', 'success'); } else { showAlert('Replace failed.', 'danger'); }
+    };
+
+    window.deleteDoc = async (id) => {
+        if (!confirm('Delete document?')) return;
+        const res = await fetch(`${API_BASE}/documents/${id}`, { method: 'DELETE' });
+        if (res.ok) { loadDocs(); showAlert('Deleted.', 'success'); } else { showAlert('Delete failed.', 'danger'); }
+    };
+
+    // initial
+    loadDocs();
+
+
 })();
