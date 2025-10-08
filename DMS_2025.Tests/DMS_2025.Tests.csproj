@@ -19,6 +19,9 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.9" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.9" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="MockQueryable.Moq" Version="8.0.0" />
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="Moq.EntityFrameworkCore" Version="9.0.0.5" />
     <PackageReference Include="NUnit" Version="4.4.0" />
     <PackageReference Include="NUnit.Analyzers" Version="3.9.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="5.1.0" />
@@ -27,10 +30,16 @@
   <ItemGroup>
     <ProjectReference Include="..\DMS_2025.DAL\DMS_2025.DAL.csproj" />
     <ProjectReference Include="..\DMS_2025.Models\DMS_2025.Models.csproj" />
+    <ProjectReference Include="..\DMS_2025.REST\DMS_2025.REST.csproj" />
+    <ProjectReference Include="..\DMS_2025.Services.Worker\DMS_2025.Services.Worker.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Worker\" />
   </ItemGroup>
 
 </Project>

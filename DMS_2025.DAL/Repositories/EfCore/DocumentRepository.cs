@@ -10,24 +10,32 @@ namespace DMS_2025.DAL.Repositories.EfCore
         private readonly DmsDbContext _db;
         public DocumentRepository(DmsDbContext db) => _db = db;
 
-        public IQueryable<Document> Query() => _db.Documents.AsQueryable();
+        public IQueryable<Document> Query() =>
+            _db.Set<Document>(); // DbSet<T> already implements IQueryable<T>
 
         public Task<Document?> GetAsync(Guid id, CancellationToken ct = default) =>
-            _db.Documents.FirstOrDefaultAsync(x => x.Id == id, ct);
+            _db.Set<Document>()
+               .AsNoTracking()
+               .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         public Task AddAsync(Document doc, CancellationToken ct = default) =>
-            _db.Documents.AddAsync(doc, ct).AsTask();
+            _db.Set<Document>().AddAsync(doc, ct).AsTask();
 
         public Task UpdateAsync(Document doc, CancellationToken ct = default)
         {
-            _db.Documents.Update(doc);
+            _db.Set<Document>().Update(doc);
             return Task.CompletedTask;
         }
 
         public async Task DeleteAsync(Guid id, CancellationToken ct = default)
         {
             var entity = await GetAsync(id, ct);
-            if (entity != null) _db.Documents.Remove(entity);
+            if (entity != null)
+            {
+                // Reattach so Remove works when GetAsync used AsNoTracking
+                _db.Set<Document>().Attach(entity);
+                _db.Set<Document>().Remove(entity);
+            }
         }
 
         public Task<int> SaveChangesAsync(CancellationToken ct = default) =>
