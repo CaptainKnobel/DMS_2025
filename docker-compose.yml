@@ -11,6 +11,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - postgres
 
@@ -121,6 +123,11 @@ services:
     ports:
         - "5672:5672"    # AMQP
         - "15672:15672"  # Management-UI
+    healthcheck:
+        test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+        interval: 5s
+        timeout: 3s
+        retries: 30
     networks:
         - postgres
     restart: unless-stopped
@@ -132,9 +139,10 @@ services:
     environment:
       - RABBITMQ__URI=${RABBITMQ__URI}
       - RABBITMQ__QUEUE=${RABBITMQ__QUEUE}
+      - WORKER_DEMO_DELAY_MS=1200
     depends_on:
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
     networks:
       - postgres
     restart: unless-stopped

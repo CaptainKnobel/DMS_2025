@@ -43,7 +43,14 @@ builder.Services.Configure<FormOptions>(o =>
 var cs = builder.Configuration.GetConnectionString("Default")
     ?? Environment.GetEnvironmentVariable("ConnectionStrings__Default")
     ?? "Host=localhost;Port=5432;Database=dms_db;Username=postgres;Password=postgres";
-builder.Services.AddDbContext<DmsDbContext>(opt => opt.UseNpgsql(cs));
+builder.Services.AddDbContext<DmsDbContext>(opt =>
+    opt.UseNpgsql(cs, o => o.EnableRetryOnFailure(
+        maxRetryCount: 5,
+        maxRetryDelay: TimeSpan.FromSeconds(2),
+        errorCodesToAdd: null
+        )
+    )
+);
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 
 // ----- RabbitMQ -----
@@ -75,7 +82,21 @@ if (app.Environment.IsDevelopment())
 
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<DmsDbContext>();
-    db.Database.Migrate(); // makes sure schema is up to date
+    var log = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Migrations");
+    for (var attempt = 1; attempt <= 10; attempt++)
+    {
+        try
+        {
+            db.Database.Migrate();  // makes sure schema is up to date
+            log.LogInformation("DB migration succeeded on attempt {Attempt}.", attempt);
+            break;
+        }
+        catch (Exception ex) when (attempt < 10)
+        {
+            log.LogWarning(ex, "DB migration failed (attempt {Attempt}/10). Retrying in 2s…", attempt);
+            await Task.Delay(TimeSpan.FromSeconds(2));
+        }
+    }
 }
 
 app.UseExceptionHandler(); // exception handler, because you alone can't handle my exceptional programming skills

@@ -27,32 +27,51 @@ await Host.CreateDefaultBuilder(args)
         RequestedHeartbeat = TimeSpan.FromSeconds(30),      // hilft Timeouts
         ClientProvidedName = "dms_2025-worker"              // schöner im RMQ UI
     };
-    services.AddSingleton(factory.CreateConnection());
+    services.AddSingleton(factory);                 // nur Factory registrieren
     services.AddHostedService<QueueConsumer>();
     })
     .RunConsoleAsync();
 
 public class QueueConsumer : BackgroundService
 {
-    private readonly IConnection _conn;
+    private readonly ConnectionFactory _factory;
+    private IConnection? _conn;
+    private IModel? _ch;
     private readonly string _queue;
     private readonly ILogger<QueueConsumer> _log;
+    private readonly int _demoDelayMs;
 
-    public QueueConsumer(IConnection conn, IConfiguration cfg, ILogger<QueueConsumer> log)
+    public QueueConsumer(ConnectionFactory factory, IConfiguration cfg, ILogger<QueueConsumer> log)
     {
-        _conn = conn;
+        _factory = factory;
         _queue = cfg["RabbitMQ:Queue"]
             ?? Environment.GetEnvironmentVariable("RABBITMQ__QUEUE")
             ?? "documents";
+        _demoDelayMs = int.TryParse(cfg["WORKER_DEMO_DELAY_MS"], out var ms) ? ms : 0;
         _log = log;
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var ch = _conn.CreateModel();
-        _conn.ConnectionShutdown += (_, ea) =>
-            _log.LogWarning("RMQ connection shutdown: {ReplyText} ({Code})", ea.ReplyText, ea.ReplyCode);
+        // Lazy connect + kleiner Retry
+        for (var attempt = 1; _conn is null || !_conn.IsOpen; attempt++)
+        {
+            try
+            {
+                _conn = _factory.CreateConnection();
+                _ch = _conn.CreateModel();
+            }
+            catch (Exception ex) when (attempt < 15 && !stoppingToken.IsCancellationRequested)
+            {
+                _log.LogWarning(ex, "RabbitMQ noch nicht bereit (Versuch {Attempt}). Retry in 2s …", attempt);
+                await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+            }
+        }
 
+        var ch = _ch!;
+
+        _conn!.ConnectionShutdown += (_, ea) =>
+            _log.LogWarning("RMQ connection shutdown: {ReplyText} ({Code})", ea.ReplyText, ea.ReplyCode);
         ch.ModelShutdown += (_, ea) =>
             _log.LogWarning("RMQ channel shutdown: {ReplyText} ({Code})", ea.ReplyText, ea.ReplyCode);
 
@@ -60,28 +79,17 @@ public class QueueConsumer : BackgroundService
         ch.BasicQos(0, prefetchCount: 1, global: false);
 
         var consumer = new AsyncEventingBasicConsumer(ch);
-        consumer.Shutdown += async (_, ea) =>
-        {
-            _log.LogWarning("RMQ consumer shutdown: {ReplyText} ({Code})", ea.ReplyText, ea.ReplyCode);
-            await Task.CompletedTask;
-        };
-        consumer.Registered += async (_, ea) =>
-        {
-            _log.LogInformation("RMQ consumer registered");
-            await Task.CompletedTask;
-        };
-        consumer.Unregistered += async (_, ea) =>
-        {
-            _log.LogInformation("RMQ consumer unregistered");
-            await Task.CompletedTask;
-        };
+        consumer.Registered += (_, __) => { _log.LogInformation("RMQ consumer registered"); return Task.CompletedTask; };
+        consumer.Unregistered += (_, __) => { _log.LogInformation("RMQ consumer unregistered"); return Task.CompletedTask; };
+        consumer.Shutdown += (_, ea) => { _log.LogWarning("RMQ consumer shutdown: {ReplyText} ({Code})", ea.ReplyText, ea.ReplyCode); return Task.CompletedTask; };
+
         consumer.Received += async (_, ea) =>
         {
             try
             {
                 var msg = Encoding.UTF8.GetString(ea.Body.ToArray());
                 _log.LogInformation("Worker received: {Message}", msg);
-                // TODO: OCR
+                if (_demoDelayMs > 0) await Task.Delay(_demoDelayMs, stoppingToken);
                 ch.BasicAck(ea.DeliveryTag, multiple: false);
             }
             catch (Exception ex)
@@ -89,18 +97,21 @@ public class QueueConsumer : BackgroundService
                 _log.LogError(ex, "Error while processing message");
                 ch.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);
             }
-            await Task.CompletedTask;
         };
-        var consumerTag = ch.BasicConsume(_queue, autoAck: false, consumer);
-        _log.LogInformation("BasicConsume started. ConsumerTag: {Tag}", consumerTag);
 
-        // Blockieren bis zum Shutdown:
+        var tag = ch.BasicConsume(_queue, autoAck: false, consumer);
+        _log.LogInformation("BasicConsume started. ConsumerTag: {Tag}", tag);
+
+        // Auf Shutdown warten
         var tcs = new TaskCompletionSource<object?>();
         stoppingToken.Register(() =>
         {
-            try { ch.Close(); ch.Dispose(); } catch { }
+            try { ch.Close(); } catch { }
+            try { ch.Dispose(); } catch { }
+            try { _conn?.Close(); } catch { }
+            try { _conn?.Dispose(); } catch { }
             tcs.TrySetResult(null);
         });
-        return tcs.Task;
+        await tcs.Task;
     }
 }
