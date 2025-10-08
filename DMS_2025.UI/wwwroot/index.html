@@ -1,86 +1,182 @@
 ﻿<!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DMS 2025 – Web UI</title>
+    <title>DMS 2025 – Web UI - Document Upload</title>
+
+    <!-- Theme bootstrap (set as early as possible to avoid FOUC) -->
+    <script>
+        (function () {
+            const saved = localStorage.getItem('theme');           // 'light' | 'dark' | null
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const initial = saved ?? (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-bs-theme', initial);
+        })();
+    </script>
+
+    <!-- Bootstrap & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    
     <style>
-        body {
-            font-family: system-ui, sans-serif;
-            margin: 2rem;
+        /* sanfte Blue-Akzente im Dark Mode */
+        [data-bs-theme="dark"] {
+            color-scheme: dark;
+            --bs-body-bg: #0e1424;          /* navy-tinted Hintergrund */
+            --bs-body-color: #e6ecf5;
+            --bs-border-color: #223251;
+            --bs-card-bg: #121a30;          /* Karten leicht abgesetzt */
+            --bs-tertiary-bg: #0b1326;
+            --bs-primary: #6ea8fe;          /* Primärfarbe soft-blue */
+            --bs-primary-rgb: 110,168,254;
+            --bs-link-color: #8bb9ff;       /* Links minimal heller */
+            --bs-link-hover-color: #bcd6ff;
         }
 
-        form {
-            display: grid;
-            gap: 1rem;
-            max-width: 560px;
+        .dropzone {
+            border: 2px dashed var(--bs-border-color);
+            border-radius: .75rem;
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
         }
 
-        input, button, textarea {
-            padding: .6rem .8rem;
-        }
+            .dropzone.drag {
+                background: rgba(var(--bs-primary-rgb), .07);
+                border-color: rgba(var(--bs-primary-rgb), .85);
+                box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .15);
+            }
 
-        .error {
-            color: #b00020;
-            margin-top: .25rem;
-            font-size: .9rem;
-        }
-
-        .ok {
-            color: #0a7d32;
-        }
-
-        .muted {
-            color: #555;
-            font-size: .9rem;
-        }
-
-        .chip {
-            display: inline-block;
-            padding: .25rem .5rem;
-            border: 1px solid #ddd;
-            border-radius: 999px;
-            margin: .25rem .25rem 0 0;
-        }
+            .dropzone.invalid {
+                border-color: var(--bs-danger);
+                background: rgba(var(--bs-danger-rgb), .08);
+            }
     </style>
 </head>
-<body>
-    <h1>DMS 2025 — Upload document</h1>
-
-    <form id="uploadForm" novalidate>
-        <div>
-            <label for="file">File (PDF/PNG/JPG/TIFF, ≤ 20MB)</label><br />
-            <input type="file" id="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" required />
-            <div class="error" data-error-for="file"></div>
+<body class="bg-body-tertiary">
+    <header class="border-bottom sticky-top" style="backdrop-filter:saturate(140%) blur(4px);">
+        <div class="container d-flex align-items-center py-2 gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-cloud-arrow-up-fill text-primary fs-4"></i>
+                <strong class="fs-5">DMS 2025</strong>
+                <span class="text-secondary">Document Upload</span>
+            </div>
+            <div class="ms-auto">
+                <button id="themeToggle" class="btn btn-sm btn-outline-primary" type="button"
+                        aria-label="Toggle theme (light/dark)">
+                    <i class="bi bi-moon-stars" id="themeIcon"></i>
+                </button>
+            </div>
         </div>
+    </header>
 
-        <div>
-            <label for="title">Title (optional, max. 255)</label><br />
-            <input type="text" id="title" name="title" maxlength="255" />
-            <div class="error" data-error-for="title"></div>
+    <main class="container py-4">
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-transparent">
+                        <h1 class="h5 mb-0"><i class="bi bi-upload me-2"></i>Upload document</h1>
+                    </div>
+                    <div class="card-body">
+                        <div id="alert" class="alert d-none" role="alert"></div>
+
+                        <form id="uploadForm" novalidate>
+                            <!-- File -->
+                            <div class="mb-3">
+                                <label class="form-label">File (PDF/PNG/JPG/TIFF, ≤ 20MB)</label>
+                                <div id="drop" class="dropzone p-4 text-center">
+                                    <input type="file" id="file" name="file" class="form-control d-none"
+                                           accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff">
+                                    <div class="text-secondary">
+                                        <strong>Drop file here</strong> or <a href="#" id="pick">browse</a>
+                                    </div>
+                                    <div id="fileMeta" class="small text-secondary mt-2"></div>
+                                </div>
+                                <div class="invalid-feedback d-block" data-error-for="file"></div>
+                            </div>
+
+                            <!-- Meta -->
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="title" class="form-label">Title (optional)</label>
+                                    <input type="text" id="title" name="title" maxlength="255" class="form-control">
+                                    <div class="invalid-feedback" data-error-for="title"></div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="location" class="form-label">Location (optional)</label>
+                                    <input type="text" id="location" name="location" maxlength="255" class="form-control">
+                                    <div class="invalid-feedback" data-error-for="location"></div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="author" class="form-label">Author (optional)</label>
+                                    <input type="text" id="author" name="author" maxlength="255" class="form-control">
+                                    <div class="invalid-feedback" data-error-for="author"></div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="creationDate" class="form-label">Creation date (optional)</label>
+                                    <input type="datetime-local" id="creationDate" name="creationDate" class="form-control">
+                                    <div class="invalid-feedback" data-error-for="creationDate"></div>
+                                </div>
+                            </div>
+
+                            <!-- Progress -->
+                            <div class="mb-3">
+                                <div class="progress" role="progressbar" aria-label="Upload progress">
+                                    <div id="bar" class="progress-bar bg-primary" style="width:0%"></div>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="d-flex gap-2 align-items-center">
+                                <button type="submit" id="btnUpload" class="btn btn-primary">
+                                    <i class="bi bi-upload me-1"></i>Upload
+                                </button>
+                                <button type="reset" id="btnReset" class="btn btn-outline-secondary">Reset</button>
+                                <div id="status" class="ms-auto text-secondary small"></div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Side info -->
+            <div class="col-lg-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-transparent"><h2 class="h6 mb-0">Info</h2></div>
+                    <div class="card-body small text-secondary">
+                        <ul class="mb-0">
+                            <li>API base: <code>/api/v1</code> (via Nginx)</li>
+                            <li>ProblemDetails werden feldweise angezeigt</li>
+                            <li>Max. Upload 20&nbsp;MB</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
+    </main>
 
-        <div>
-            <label for="location">Location (optional, max. 255)</label><br />
-            <input type="text" id="location" name="location" maxlength="255" />
-            <div class="error" data-error-for="location"></div>
-        </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
 
-        <div>
-            <label for="author">Author (optional, max. 255)</label><br />
-            <input type="text" id="author" name="author" maxlength="255" />
-            <div class="error" data-error-for="author"></div>
-        </div>
+    <!-- Theme toggle logic -->
+    <script>
+        (function () {
+            const btn = document.getElementById('themeToggle');
+            const icon = document.getElementById('themeIcon');
 
-        <div>
-            <label for="creationDate">Creation date (optional)</label><br />
-            <input type="datetime-local" id="creationDate" name="creationDate" />
-            <div class="error" data-error-for="creationDate"></div>
-        </div>
-
-        <button type="submit">Upload</button>
-        <div id="status"></div>
-    </form>
+            function isDark() {
+                return document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            }
+            function renderIcon() {
+                icon.className = 'bi ' + (isDark() ? 'bi-brightness-high' : 'bi-moon-stars');
+            }
+            btn.addEventListener('click', () => {
+                const next = isDark() ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-bs-theme', next);
+                localStorage.setItem('theme', next);
+                renderIcon();
+            });
+            renderIcon();
+        })();
+    </script>
 
     <script src="./app.js"></script>
 </body>

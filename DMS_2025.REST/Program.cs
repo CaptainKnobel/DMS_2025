@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using FluentValidation;
 using DMS_2025.REST.Validation;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Serilog;
 using DMS_2025.DAL;
 using DMS_2025.REST.Messaging;
@@ -53,6 +54,17 @@ builder.Services.AddDbContext<DmsDbContext>(opt =>
 );
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 
+// CORS nur für Dev: erlaube UI-Ursprünge
+builder.Services.AddCors(o => o.AddPolicy("Dev", p =>
+    p.SetIsOriginAllowed(origin =>
+    {
+        if (string.IsNullOrWhiteSpace(origin)) return false;
+        try { return new Uri(origin).IsLoopback; } catch { return false; }
+    })
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+));
+
 // ----- RabbitMQ -----
 builder.Services.AddSingleton(sp =>
 {
@@ -73,6 +85,12 @@ builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
 
 // ----- build
 var app = builder.Build();
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+app.UseSerilogRequestLogging();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -99,28 +117,11 @@ if (app.Environment.IsDevelopment())
     }
 }
 
-app.UseExceptionHandler(); // exception handler, because you alone can't handle my exceptional programming skills
+app.UseExceptionHandler();
 app.UseStatusCodePages();
-//app.UseHttpsRedirection();  // only ok for local
-
-//app.UseAuthorization();
-
+app.UseCors("Dev");         // CORS einschalten (muss vor MapControllers passieren)
 app.MapControllers();
-//app.MapGet("/", () => "OK");
-
-//app.MapGet("/db-ping", async (DmsDbContext db) =>
-//{
-//    var ok = await db.Database.CanConnectAsync();
-//    return Results.Ok(new { canConnect = ok });
-//});
-
-//app.MapGet("/api/v1/documents/{id}", async (Guid id, IDocumentRepository repo, CancellationToken ct) =>
-//{
-//    var doc = await repo.GetAsync(id, ct);
-//    return doc is null ? Results.NotFound() : Results.Ok(doc);
-//});
-
-app.MapGet("/health", () => Results.Ok(new { status = "Healthy" })); // i'm sick rn so it'd be good if at least one of us is healthy ...
+app.MapGet("/api/v1/health", () => Results.Ok(new { status = "Healthy", ok = true}));
 
 app.Run();
 // ^ v !only one! v ^

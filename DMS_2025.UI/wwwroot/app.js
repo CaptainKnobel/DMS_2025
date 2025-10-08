@@ -1,92 +1,179 @@
-﻿(function () {
-    // const API_BASE = '/api/v1';  // (nginx/compose)
-    // const API_BASE = 'http://localhost:5062/api/v1'; // (local no-proxy, no nginx)
-    const API_BASE = '/api/v1';
+﻿(() => {
+    const API_BASE = (() => {
+        const p = window.location;
+        const runningBehindNginx = p.port === '8081' || p.pathname.startsWith('/ui/');
+        return runningBehindNginx ? '/api/v1' : 'http://localhost:8081/api/v1';
+    })();
 
+    // Elements
     const form = document.getElementById('uploadForm');
+    const fileInput = document.getElementById('file');
+    const drop = document.getElementById('drop');
+    const pick = document.getElementById('pick');
+    const fileMeta = document.getElementById('fileMeta');
+    const bar = document.getElementById('bar');
+    const btnUpload = document.getElementById('btnUpload');
+    const btnReset = document.getElementById('btnReset');
     const statusEl = document.getElementById('status');
-    const setError = (n, m) => {
-        const el = document.querySelector(`[data-error-for="${n}"]`);
-        if (el) el.textContent = m || '';
+    const alertEl = document.getElementById('alert');
+
+    // Helpers
+    const qErr = (n) => document.querySelector(`[data-error-for="${n}"]`);
+    const clearFieldErrors = () => {
+        ['title', 'location', 'author', 'creationDate'].forEach(id => {
+            const el = document.getElementById(id);
+            el.classList.remove('is-invalid');
+            qErr(id).textContent = '';
+        });
+        drop.classList.remove('invalid');
+        qErr('file').textContent = '';
+        hideAlert();
     };
-    const clear = () => {
-        ['file', 'title', 'location', 'author', 'creationDate'].forEach(n => setError(n, ''));
-        statusEl.textContent = '';
-        statusEl.className = '';
+    const setFieldError = (name, message) => {
+        if (name === 'file') {
+            drop.classList.add('invalid');
+            qErr('file').textContent = message || '';
+            return;
+        }
+        const el = document.getElementById(name);
+        if (el) el.classList.add('is-invalid');
+        qErr(name).textContent = message || '';
+    };
+    const setStatus = (t) => statusEl.textContent = t || '';
+    const setProgress = (p) => bar.style.width = `${Math.max(0, Math.min(100, p))}%`;
+    const showAlert = (msg, type = 'danger') => {
+        alertEl.className = `alert alert-${type}`;
+        alertEl.textContent = msg;
+    };
+    const hideAlert = () => alertEl.className = 'alert d-none';
+    const fmtBytes = n => {
+        const u = ['B', 'KB', 'MB', 'GB']; let i = 0;
+        while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+        return `${n.toFixed(i ? 1 : 0)} ${u[i]}`;
     };
 
-    function clientValidate(file, dto) {
+    // Drag&Drop (minimal)
+    const openPicker = (e) => { e?.preventDefault?.(); fileInput.click(); };
+    const updateMeta = (file) => {
+        fileMeta.textContent = file ? `${file.name} • ${file.type || 'unknown'} • ${fmtBytes(file.size)}` : '';
+    };
+    ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => {
+        e.preventDefault(); drop.classList.add('drag');
+    }));
+    ;['dragleave', 'dragend', 'drop'].forEach(ev => drop.addEventListener(ev, e => {
+        e.preventDefault(); drop.classList.remove('drag');
+    }));
+    drop.addEventListener('drop', e => {
+        const f = e.dataTransfer?.files?.[0];
+        if (f) { fileInput.files = e.dataTransfer.files; updateMeta(f); }
+    });
+    drop.addEventListener('click', openPicker);
+    pick.addEventListener('click', openPicker);
+    fileInput.addEventListener('change', () => updateMeta(fileInput.files[0]));
+
+    // Limit future date (UX)
+    const dt = document.getElementById('creationDate');
+    if (dt) {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        dt.max = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    }
+
+    // Client validation
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/tiff'];
+    function validateClient(file, dto) {
         if (!file) return { field: 'file', message: 'File is required.' };
-        if (file.size <= 0 || file.size > 20 * 1024 * 1024) return { field: 'file', message: 'File must be >0B and ≤ 20MB.' };
-        const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/tiff'];
+        if (file.size <= 0 || file.size > 20 * 1024 * 1024) return { field: 'file', message: 'File must be > 0 B and ≤ 20 MB.' };
         if (!allowed.includes(file.type)) return { field: 'file', message: 'Only PDF/PNG/JPG/TIFF allowed.' };
-
-        const tooLong = (s, max) => s && s.length > max;
+        const tooLong = (s, m) => s && s.length > m;
         if (tooLong(dto.title, 255)) return { field: 'title', message: 'Max 255 characters.' };
         if (tooLong(dto.location, 255)) return { field: 'location', message: 'Max 255 characters.' };
         if (tooLong(dto.author, 255)) return { field: 'author', message: 'Max 255 characters.' };
         return null;
     }
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault(); clear();
+    // Submit
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        clearFieldErrors(); hideAlert(); setStatus(''); setProgress(0);
 
-        const file = document.getElementById('file').files[0];
+        const file = fileInput.files[0];
         const dto = {
             title: document.getElementById('title').value?.trim() || '',
             location: document.getElementById('location').value?.trim() || '',
             author: document.getElementById('author').value?.trim() || '',
             creationDate: document.getElementById('creationDate').value || ''
         };
-
-        const err = clientValidate(file, dto);
-        if (err) { setError(err.field, err.message); return; }
+        const err = validateClient(file, dto);
+        if (err) { setFieldError(err.field, err.message); return; }
 
         const fd = new FormData();
         fd.append('file', file);
         if (dto.title) fd.append('title', dto.title);
         if (dto.location) fd.append('location', dto.location);
         if (dto.author) fd.append('author', dto.author);
-        if (dto.creationDate) {
-            // send ISO string; server will bind to DateTime?
-            const iso = new Date(dto.creationDate).toISOString();
-            fd.append('creationDate', iso);
-        }
+        if (dto.creationDate) fd.append('creationDate', new Date(dto.creationDate).toISOString());
 
-        try {
-            statusEl.textContent = 'Uploading…';
-            statusEl.className = 'muted';
+        // XHR für Fortschritt
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE}/documents/upload`, true);
 
-            const res = await fetch(`${API_BASE}/documents/upload`, {
-                method: 'POST',
-                body: fd
-            });
+        // UI busy
+        btnUpload.disabled = true; btnReset.disabled = true;
+        setStatus('Uploading…');
+        bar.classList.add('progress-bar-striped', 'progress-bar-animated');
 
-            if (res.ok) {
-                statusEl.textContent = 'Upload successful.';
-                statusEl.className = 'ok';
-                form.reset();
+        xhr.upload.onprogress = (ev) => {
+            if (ev.lengthComputable) setProgress(Math.round(ev.loaded / ev.total * 100));
+        };
+
+        xhr.onreadystatechange = () => {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return;
+
+            btnUpload.disabled = false; btnReset.disabled = false;
+            bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+
+            const ok = xhr.status >= 200 && xhr.status < 300;
+            if (ok) {
+                setProgress(100); setStatus('Upload successful.');
+                showAlert('Upload successful.', 'success');
+                form.reset(); updateMeta(null);
                 return;
             }
 
-            const ct = res.headers.get('content-type') || '';
-            if (ct.includes('application/problem+json') || ct.includes('application/json')) {
-                const problem = await res.json().catch(() => null);
-                if (problem?.errors) {
-                    for (const [field, msgs] of Object.entries(problem.errors)) {
-                        setError(field.toLowerCase(), Array.isArray(msgs) ? msgs[0] : String(msgs));
-                    }
-                    statusEl.textContent = 'Please check your input.';
-                    statusEl.className = '';
-                    return;
-                }
+            // Fehlerbehandlung
+            const ct = xhr.getResponseHeader('content-type') || '';
+            let problem = null;
+            if (ct.includes('json')) { try { problem = JSON.parse(xhr.responseText); } catch { } }
+
+            if (xhr.status === 413) {
+                setFieldError('file', 'File too large (server limit).');
+                showAlert('413 – Payload too large', 'danger');
+                setStatus(''); return;
             }
-            statusEl.textContent = `Error: ${res.status} ${res.statusText}`;
-            statusEl.className = '';
-        } catch (ex) {
-            console.error(ex);
-            statusEl.textContent = 'Network error — please try again.';
-            statusEl.className = '';
-        }
+
+            if (problem?.errors) {
+                Object.entries(problem.errors).forEach(([field, msgs]) => {
+                    setFieldError(field.toLowerCase(), Array.isArray(msgs) ? msgs[0] : String(msgs));
+                });
+                showAlert('Please check your input.', 'warning');
+                return;
+            }
+
+            showAlert(`Error ${xhr.status} ${xhr.statusText || ''}`, 'danger');
+        };
+
+        xhr.onerror = () => {
+            btnUpload.disabled = false; btnReset.disabled = false;
+            bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            showAlert('Network error — please try again.', 'danger');
+        };
+
+        xhr.send(fd);
+    });
+
+    // Reset
+    btnReset.addEventListener('click', () => {
+        clearFieldErrors(); hideAlert(); setStatus(''); setProgress(0); updateMeta(null);
     });
 })();
