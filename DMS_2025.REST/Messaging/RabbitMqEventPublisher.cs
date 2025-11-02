@@ -51,4 +51,36 @@ public class RabbitMqEventPublisher : IEventPublisher
         }
         return Task.CompletedTask;
     }
+    public Task PublishOcrRequestedAsync(OcrRequestMessage msg, CancellationToken ct = default)
+    {
+        try
+        {
+            using var ch = _conn.CreateModel();
+            ch.QueueDeclare(_queue, durable: true, exclusive: false, autoDelete: false);
+
+            var payload = JsonSerializer.Serialize(new
+            {
+                type = "OcrRequested",
+                documentId = msg.DocumentId,
+                bucket = msg.Bucket,
+                objectName = msg.ObjectName,
+                originalFileName = msg.OriginalFileName,
+                createdUtc = DateTime.UtcNow
+            });
+
+            var body = Encoding.UTF8.GetBytes(payload);
+            var props = ch.CreateBasicProperties();
+            props.Persistent = true;
+            props.ContentType = "application/json";
+            props.MessageId = msg.DocumentId.ToString();
+
+            ch.BasicPublish(exchange: "", routingKey: _queue, basicProperties: props, body: body);
+            _log.LogInformation("Published OcrRequested for {DocId}", msg.DocumentId);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Failed to publish OcrRequested for {DocId}", msg.DocumentId);
+        }
+        return Task.CompletedTask;
+    }
 }

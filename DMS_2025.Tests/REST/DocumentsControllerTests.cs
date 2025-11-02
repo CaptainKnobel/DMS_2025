@@ -1,11 +1,17 @@
 ﻿using DMS_2025.DAL.Repositories.Interfaces;
 using DMS_2025.Models;
 using DMS_2025.REST;
+using DMS_2025.REST.Config;
 using DMS_2025.REST.Controllers.V1;
 using DMS_2025.REST.DTOs;
 using DMS_2025.REST.Messaging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using Minio;
+using Minio.DataModel;      // für ObjectStat (Rückgabewert)
+using Minio.DataModel.Args; // für *Args Typen
+using Minio.DataModel.Response;
 using Moq;
 using NUnit.Framework;
 using System;
@@ -24,18 +30,43 @@ namespace DMS_2025.Tests.REST
         private Mock<IEventPublisher> _pub = null!;
         private DocumentsController _ctrl = null!;
         private string _tmpDir = null!;
+        private Mock<IMinioClient> _minio = null!;
+        private IOptions<MinioSettings> _minioOptions = null!;
 
         [SetUp]
         public void SetUp()
         {
             _repo = new Mock<IDocumentRepository>(MockBehavior.Strict);
             _pub = new Mock<IEventPublisher>(MockBehavior.Strict);
+            _pub.Setup(p => p.PublishOcrRequestedAsync(It.IsAny<OcrRequestMessage>(),It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+            _minio = new Mock<IMinioClient>(MockBehavior.Strict);
+            _minio
+                .Setup(m => m.BucketExistsAsync(It.IsAny<BucketExistsArgs>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+            _minio
+                .Setup(m => m.PutObjectAsync(It.IsAny<PutObjectArgs>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(default(PutObjectResponse)!);
+
+            _minioOptions = Options.Create(new MinioSettings
+            {
+                Bucket = "uploads",
+                Endpoint = "minio:9000",
+                AccessKey = "minioadmin",
+                SecretKey = "minioadmin",
+                UseSSL = false
+            });
 
             _tmpDir = Path.Combine(Path.GetTempPath(), "dms_tests_" + Guid.NewGuid());
             Directory.CreateDirectory(_tmpDir);
 
             var root = new UploadRoot(_tmpDir);
-            _ctrl = new DocumentsController(_repo.Object, _pub.Object, root);
+            _ctrl = new DocumentsController(
+                _repo.Object,
+                _pub.Object,
+                root,
+                _minio.Object,
+                _minioOptions);
         }
 
         [TearDown]
@@ -160,7 +191,7 @@ namespace DMS_2025.Tests.REST
         [Test]
         public async Task Upload_Saves_File_Persists_And_Publishes()
         {
-            // Arrange a fake IFormFile
+            // Arrange
             var content = new MemoryStream();
             using (var writer = new StreamWriter(content, leaveOpen: true))
             {
@@ -171,8 +202,8 @@ namespace DMS_2025.Tests.REST
             var formFile = new Mock<IFormFile>();
             formFile.SetupGet(f => f.FileName).Returns("doc.txt");
             formFile.SetupGet(f => f.Length).Returns(content.Length);
-            formFile.Setup(f => f.CopyToAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-                    .Returns<Stream, CancellationToken>((s, ct) => content.CopyToAsync(s, ct));
+            formFile.SetupGet(f => f.ContentType).Returns("text/plain");
+            formFile.Setup(f => f.OpenReadStream()).Returns(content);
 
             var req = new DocumentUploadRequest
             {
@@ -199,6 +230,7 @@ namespace DMS_2025.Tests.REST
             _repo.Verify(r => r.AddAsync(It.Is<Document>(d => d.Title == "Upload" && d.Author == "uploader"), It.IsAny<CancellationToken>()), Times.Once);
             _repo.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
             _pub.Verify(p => p.PublishDocumentCreatedAsync(It.IsAny<Document>(), It.IsAny<CancellationToken>()), Times.Once);
+            _pub.Verify(p => p.PublishOcrRequestedAsync(It.IsAny<OcrRequestMessage>(), It.IsAny<CancellationToken>()), Times.Once);
         }
     }
 }

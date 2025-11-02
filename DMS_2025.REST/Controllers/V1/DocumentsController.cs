@@ -6,6 +6,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 //using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Minio;
+using Minio.DataModel.Args;
+using Microsoft.Extensions.Options;
+using DMS_2025.REST.Config;
 
 namespace DMS_2025.REST.Controllers.V1
 {
@@ -17,12 +21,21 @@ namespace DMS_2025.REST.Controllers.V1
         private readonly IDocumentRepository _repo;
         private readonly IEventPublisher _pub;
         private readonly string _root;
-        public DocumentsController(IDocumentRepository repo, IEventPublisher pub, UploadRoot root) // => (_repo, _pub, _root) = (repo, pub, root);
+        private readonly IMinioClient _minio;
+        private readonly MinioSettings _minioCfg;
+        public DocumentsController(
+            IDocumentRepository repo,
+            IEventPublisher pub,
+            UploadRoot root,
+            IMinioClient minio,
+            IOptions<MinioSettings> minioCfg)
         {
             _repo = repo;
             _pub = pub;
             _root = Path.GetFullPath(root.Path);
             Directory.CreateDirectory(_root);
+            _minio = minio;
+            _minioCfg = minioCfg.Value;
         }
 
         // ----- Helper
@@ -178,7 +191,6 @@ namespace DMS_2025.REST.Controllers.V1
         [RequestSizeLimit(20L * 1024 * 1024)]
         public async Task<IActionResult> Upload([FromForm] DocumentUploadRequest req, CancellationToken ct)
         {
-            // TODO: replace sprint2+3 temp solution
             // Persist the file to disk (temp for Sprint 2)
             var fullPath = SaveFile(req.File);
 
@@ -194,14 +206,38 @@ namespace DMS_2025.REST.Controllers.V1
                 OriginalFileName = req.File.FileName,
                 ContentType = req.File.ContentType,
                 FileSize = req.File.Length
-                // TODO: add e.g. StorageKey property to Document later if the schema gets it
             };
-
             await _repo.AddAsync(entity, ct);
             await _repo.SaveChangesAsync(ct);
-            await _pub.PublishDocumentCreatedAsync(entity, ct);
 
-            // Return Created with a DTO
+            // upload in MinIO
+            var exists = await _minio.BucketExistsAsync(new BucketExistsArgs().WithBucket(_minioCfg.Bucket), ct);
+            if (!exists)
+                await _minio.MakeBucketAsync(new MakeBucketArgs().WithBucket(_minioCfg.Bucket), ct);
+
+            var safeName = Path.GetFileName(req.File.FileName);
+            var objectName = $"{entity.Id}/{Guid.NewGuid()}_{safeName}";
+
+            await using (var s = req.File.OpenReadStream())
+            {
+                await _minio.PutObjectAsync(new PutObjectArgs()
+                    .WithBucket(_minioCfg.Bucket)
+                    .WithObject(objectName)
+                    .WithStreamData(s)
+                    .WithObjectSize(req.File.Length)
+                    .WithContentType(req.File.ContentType ?? "application/pdf"), ct);
+            }
+
+            // Events + OCR-Event
+            await _pub.PublishDocumentCreatedAsync(entity, ct);
+            await _pub.PublishOcrRequestedAsync(new OcrRequestMessage(
+                entity.Id,
+                _minioCfg.Bucket,
+                objectName,
+                safeName
+            ), ct);
+
+            // Response: Return Created with a DTO
             return CreatedAtAction(nameof(Get), new { id = entity.Id }, new DocumentResponse
             {
                 Id = entity.Id,

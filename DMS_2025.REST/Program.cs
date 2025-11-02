@@ -15,7 +15,10 @@ using Serilog;
 using DMS_2025.DAL;
 using DMS_2025.REST;
 using DMS_2025.REST.Messaging;
+using DMS_2025.REST.Config;
 using RabbitMQ.Client;
+using Microsoft.Extensions.Options;
+using Minio;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -83,6 +86,18 @@ builder.Services.AddSingleton(sp =>
     return factory.CreateConnection();
 });
 builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+
+// ----- MinIO -----
+builder.Services.Configure<MinioSettings>(builder.Configuration.GetSection("Minio"));
+builder.Services.AddSingleton<IMinioClient>(sp =>
+{
+    var cfg = sp.GetRequiredService<IOptions<MinioSettings>>().Value;
+    return new MinioClient()
+        .WithEndpoint(cfg.Endpoint)
+        .WithCredentials(cfg.AccessKey, cfg.SecretKey)
+        .WithSSL(cfg.UseSSL)
+        .Build();
+});
 
 // --- File storage root (configurable) ---
 var uploadRoot = builder.Configuration["FileStorage:Root"]
