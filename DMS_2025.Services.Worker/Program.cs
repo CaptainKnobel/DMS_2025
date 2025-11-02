@@ -9,6 +9,8 @@ using Minio;
 using Minio.DataModel.Args;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using ImageMagick;
+using Tesseract;
 using Serilog;
 using System;
 using System.Text;
@@ -131,8 +133,17 @@ public class QueueConsumer : BackgroundService
                             .WithCallbackStream(s => s.CopyTo(fs)), cancellationToken: stoppingToken);
                     }
 
-                    var text = await RunTesseractAsync(tmp, stoppingToken);
-                    _log.LogInformation("OCR for {Original}: {Preview}...", original, text.Length > 160 ? text[..160] : text);
+                    var mode = Environment.GetEnvironmentVariable("OCR_MODE")?.ToLowerInvariant() ?? "magick+tess";
+
+                    string text = mode switch
+                    {
+                        "magick+tess" => await OcrWithMagickAndTesseractAsync(tmp, stoppingToken),
+                        "tesswrapper" => await OcrWithTesseractWrapperAsync(tmp, stoppingToken),
+                        "cli" => await OcrWithCliFallbackAsync(tmp, stoppingToken),
+                        _ => await OcrWithMagickAndTesseractAsync(tmp, stoppingToken)
+                    };
+
+                    _log.LogInformation("OCR({Mode}) for {Original}: {Preview}...", mode, original, text.Length > 200 ? text[..200] : text);
                 }
                 else
                 {
@@ -178,5 +189,112 @@ public class QueueConsumer : BackgroundService
         await p.WaitForExitAsync(ct);
         if (p.ExitCode != 0) throw new Exception("tesseract failed: " + err);
         return output;
+    }
+
+    // Tesseract stuff
+    static async Task<string> OcrWithMagickAndTesseractAsync(string pdfPath, CancellationToken ct)
+    {
+        // PDF -> IMages (300 DPI) via Magick.NET (Ghostscript intern)
+        var images = new MagickImageCollection();
+        var readSettings = new MagickReadSettings
+        {
+            Density = new Density(300, 300), // 300 DPI
+            Format = MagickFormat.Pdf
+        };
+        await Task.Run(() => images.Read(pdfPath, readSettings), ct);
+
+        var sb = new System.Text.StringBuilder();
+
+        // Tesseract .NET Wrapper initialisieren (deu+eng)
+        using var engine = new TesseractEngine(
+            Environment.GetEnvironmentVariable("TESSDATA_PREFIX") ?? "/usr/share/tesseract-ocr/4.00/tessdata",
+            "deu+eng",
+            EngineMode.Default);
+
+        // Seiten schlau vorverarbeiten und OCR'n
+        for (int i = 0; i < images.Count; i++)
+        {
+            using var img = (MagickImage)images[i];
+            // ein paar Filter:
+            img.ColorSpace = ColorSpace.Gray;
+            img.ContrastStretch(new Percentage(0.5), new Percentage(99.5)); // Leichte Normalisierung
+            img.Deskew(new Percentage(40));                                 // Gerade ziehen, wenn leicht schief
+            img.FilterType = FilterType.Triangle;
+            img.Resize(new Percentage(110));                                // minimal größer
+
+            // temporär als PNG speichern, weil der Tesseract-Wrapper gut mit Files kann
+            var tmpPng = Path.Combine(Path.GetTempPath(), $"ocr_{Guid.NewGuid():N}.png");
+            await img.WriteAsync(tmpPng, MagickFormat.Png, ct);
+
+            using var pix = Pix.LoadFromFile(tmpPng);
+            using var page = engine.Process(pix);
+            sb.AppendLine(page.GetText());
+
+            try { File.Delete(tmpPng); } catch { /* ignore */ }
+        }
+
+        images.Dispose();
+        return sb.ToString();
+    }
+
+    static async Task<string> OcrWithTesseractWrapperAsync(string imageOrPdfPath, CancellationToken ct)
+    {
+        // Erwartet bereits Images (PNG/TIFF). Wenn es PDF ist, vorher extern rastern!
+        using var engine = new TesseractEngine(
+            Environment.GetEnvironmentVariable("TESSDATA_PREFIX") ?? "/usr/share/tesseract-ocr/4.00/tessdata",
+            "deu+eng",
+            EngineMode.Default);
+
+        // Wenn PDF -> kurze Ausnahme, damit klar ist, warum es fehlschlägt
+        if (Path.GetExtension(imageOrPdfPath).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("OCR_MODE=tesswrapper erwartet Rasterbilder (PNG/TIFF), nicht PDF.");
+
+        using var pix = Pix.LoadFromFile(imageOrPdfPath);
+        using var page = engine.Process(pix);
+        return await Task.FromResult(page.GetText());
+    }
+
+    static async Task<string> OcrWithCliFallbackAsync(string pdfPath, CancellationToken ct)
+    {
+        // Ghostscript: PDF -> PNGs
+        var outDir = Path.Combine(Path.GetTempPath(), "ocr_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outDir);
+
+        var gs = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "gs",
+            Arguments = $"-q -dBATCH -dNOPAUSE -sDEVICE=png16m -r300 -sOutputFile=\"{Path.Combine(outDir, "page-%04d.png")}\" \"{pdfPath}\"",
+            RedirectStandardError = true,
+            RedirectStandardOutput = true
+        };
+        using (var p = System.Diagnostics.Process.Start(gs)!)
+        {
+            _ = await p.StandardOutput.ReadToEndAsync(ct);
+            var err = await p.StandardError.ReadToEndAsync(ct);
+            await p.WaitForExitAsync(ct);
+            if (p.ExitCode != 0) throw new Exception("Ghostscript failed: " + err);
+        }
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var img in Directory.EnumerateFiles(outDir, "page-*.png").OrderBy(x => x))
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "tesseract",
+                Arguments = $"\"{img}\" stdout -l deu+eng",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using var tp = System.Diagnostics.Process.Start(psi)!;
+            var pageText = await tp.StandardOutput.ReadToEndAsync(ct);
+            var terr = await tp.StandardError.ReadToEndAsync(ct);
+            await tp.WaitForExitAsync(ct);
+            if (tp.ExitCode != 0) throw new Exception("tesseract failed: " + terr);
+
+            sb.AppendLine(pageText);
+        }
+
+        try { Directory.Delete(outDir, recursive: true); } catch { }
+        return sb.ToString();
     }
 }

@@ -184,6 +184,7 @@ services:
       - MINIO__ACCESSKEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO__SECRETKEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO__BUCKET=${MINIO_BUCKET:-uploads}
+      - OCR_MODE=magick+tess
       - WORKER_DEMO_DELAY_MS=1200
     depends_on:
       rabbitmq:
