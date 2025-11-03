@@ -8,79 +8,116 @@ using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 
 
-public class RabbitMqEventPublisher : IEventPublisher
+public class RabbitMqEventPublisher : IEventPublisher, IDisposable
 {
-    private readonly IConnection _conn;
+    private readonly IConnectionFactory _factory;
     private readonly string _queue;
     private readonly ILogger<RabbitMqEventPublisher> _log;
 
-    public RabbitMqEventPublisher(IConnection conn, IConfiguration cfg, ILogger<RabbitMqEventPublisher> log)
+    private IConnection? _conn;
+    private IModel? _ch;
+    private bool _queueDeclared;
+
+    public RabbitMqEventPublisher(
+        IConnectionFactory factory,
+        IConfiguration cfg,
+        ILogger<RabbitMqEventPublisher> log)
     {
-        _conn = conn;
+        _factory = factory;
         _queue = cfg["RabbitMQ:Queue"]
-            ?? Environment.GetEnvironmentVariable("RABBITMQ__QUEUE")
-            ?? "documents";
+                 ?? Environment.GetEnvironmentVariable("RABBITMQ__QUEUE")
+                 ?? "documents";
         _log = log;
     }
 
+    private void EnsureOpen()
+    {
+        if (_conn is { IsOpen: true } && _ch is { IsOpen: true } && _queueDeclared) return;
+
+        // Alte, evtl. tote Verbindungen sauber schließen
+        try { _ch?.Close(); } catch { /* ignore */ }
+        try { _conn?.Close(); } catch { /* ignore */ }
+        _ch?.Dispose();
+        _conn?.Dispose();
+
+        _conn = _factory.CreateConnection();     // <— erst jetzt verbinden
+        _ch = _conn.CreateModel();
+        _ch.QueueDeclare(_queue, durable: true, exclusive: false, autoDelete: false);
+        _queueDeclared = true;
+    }
     public Task PublishDocumentCreatedAsync(Document doc, CancellationToken ct = default)
     {
-        try
+        var payload = JsonSerializer.Serialize(new
         {
-            using var ch = _conn.CreateModel();
-            ch.QueueDeclare(_queue, durable: true, exclusive: false, autoDelete: false);
-            var payload = JsonSerializer.Serialize(new
-            {
-                type = "DocumentCreated",
-                id = doc.Id,
-                title = doc.Title,
-                createdUtc = DateTime.UtcNow
-            });
-            var body = Encoding.UTF8.GetBytes(payload);
-            var props = ch.CreateBasicProperties();
-            props.Persistent = true;
-            props.ContentType = "application/json";
-            props.MessageId = doc.Id.ToString();
-            ch.BasicPublish(exchange: "", routingKey: _queue, basicProperties: props, body: body);
-            _log.LogInformation("Published DocumentCreated for {DocId}", doc.Id);
-        }
-        catch (Exception ex)
-        {
-            _log.LogError(ex, "Failed to publish DocumentCreated for {DocId}", doc.Id);
-            // nicht werfen -> API bleibt erfolgreich
-        }
+            type = "DocumentCreated",
+            id = doc.Id,
+            title = doc.Title,
+            createdUtc = DateTime.UtcNow
+        });
+
+        PublishCore(doc.Id.ToString(), payload);
         return Task.CompletedTask;
     }
     public Task PublishOcrRequestedAsync(OcrRequestMessage msg, CancellationToken ct = default)
     {
+        var payload = JsonSerializer.Serialize(new
+        {
+            type = "OcrRequested",
+            documentId = msg.DocumentId,
+            bucket = msg.Bucket,
+            objectName = msg.ObjectName,
+            originalFileName = msg.OriginalFileName,
+            createdUtc = DateTime.UtcNow
+        });
+
+        PublishCore(msg.DocumentId.ToString(), payload);
+        return Task.CompletedTask;
+    }
+    private void PublishCore(string messageId, string json)
+    {
         try
         {
-            using var ch = _conn.CreateModel();
-            ch.QueueDeclare(_queue, durable: true, exclusive: false, autoDelete: false);
+            EnsureOpen();
 
-            var payload = JsonSerializer.Serialize(new
-            {
-                type = "OcrRequested",
-                documentId = msg.DocumentId,
-                bucket = msg.Bucket,
-                objectName = msg.ObjectName,
-                originalFileName = msg.OriginalFileName,
-                createdUtc = DateTime.UtcNow
-            });
-
-            var body = Encoding.UTF8.GetBytes(payload);
-            var props = ch.CreateBasicProperties();
+            var body = Encoding.UTF8.GetBytes(json);
+            var props = _ch!.CreateBasicProperties();
             props.Persistent = true;
             props.ContentType = "application/json";
-            props.MessageId = msg.DocumentId.ToString();
+            props.MessageId = messageId;
 
-            ch.BasicPublish(exchange: "", routingKey: _queue, basicProperties: props, body: body);
-            _log.LogInformation("Published OcrRequested for {DocId}", msg.DocumentId);
+            _ch.BasicPublish(exchange: "", routingKey: _queue, basicProperties: props, body: body);
+            _log.LogInformation("Published message {MessageId} to queue {Queue}", messageId, _queue);
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "Failed to publish OcrRequested for {DocId}", msg.DocumentId);
+            // Einmaliger Reconnect-Versuch (z.B. nach Broker-Restart)
+            _log.LogWarning(ex, "Publish failed (first attempt). Reconnecting …");
+            try
+            {
+                _queueDeclared = false;
+                EnsureOpen();
+
+                var body = Encoding.UTF8.GetBytes(json);
+                var props = _ch!.CreateBasicProperties();
+                props.Persistent = true;
+                props.ContentType = "application/json";
+                props.MessageId = messageId;
+
+                _ch.BasicPublish(exchange: "", routingKey: _queue, basicProperties: props, body: body);
+                _log.LogInformation("Published message {MessageId} to queue {Queue} after reconnect", messageId, _queue);
+            }
+            catch (Exception ex2)
+            {
+                // Nicht weiterwerfen – API soll nicht mit 500 sterben, nur loggen
+                _log.LogError(ex2, "Failed to publish message {MessageId} to queue {Queue}", messageId, _queue);
+            }
         }
-        return Task.CompletedTask;
+    }
+    public void Dispose()
+    {
+        try { _ch?.Close(); } catch { /* ignore */ }
+        try { _conn?.Close(); } catch { /* ignore */ }
+        _ch?.Dispose();
+        _conn?.Dispose();
     }
 }

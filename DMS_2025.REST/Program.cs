@@ -19,6 +19,8 @@ using DMS_2025.REST.Config;
 using RabbitMQ.Client;
 using Microsoft.Extensions.Options;
 using Minio;
+using Microsoft.OpenApi.Models;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,7 +37,11 @@ builder.Services.AddControllers(options =>
 });
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "DMS_2025.REST", Version = "v1" });
+    c.CustomSchemaIds(t => t.FullName);
+});
 //builder.Services.AddValidatorsFromAssemblyContaining<DocumentCreateValidator>();
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 builder.Services.AddProblemDetails();
@@ -70,12 +76,13 @@ builder.Services.AddCors(o => o.AddPolicy("Dev", p =>
 ));
 
 // ----- RabbitMQ -----
-builder.Services.AddSingleton(sp =>
+builder.Services.AddSingleton<IConnectionFactory>(sp =>
 {
     var uri = builder.Configuration["RabbitMQ:Uri"]
-        ?? Environment.GetEnvironmentVariable("RABBITMQ__URI")
-        ?? "amqp://guest:guest@rabbitmq:5672";
-    var factory = new ConnectionFactory {
+              ?? Environment.GetEnvironmentVariable("RABBITMQ__URI")
+              ?? "amqp://guest:guest@rabbitmq:5672";
+    return new ConnectionFactory
+    {
         Uri = new Uri(uri),
         AutomaticRecoveryEnabled = true,
         TopologyRecoveryEnabled = true,                     // (re-declare queues, QoS, consumer)
@@ -83,7 +90,6 @@ builder.Services.AddSingleton(sp =>
         RequestedHeartbeat = TimeSpan.FromSeconds(30),      // hilft Timeouts
         ClientProvidedName = "dms_2025-rest"                // schöner im RMQ UI
     };
-    return factory.CreateConnection();
 });
 builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
 
@@ -105,18 +111,68 @@ var uploadRoot = builder.Configuration["FileStorage:Root"]
 Directory.CreateDirectory(uploadRoot);
 builder.Services.AddSingleton(new UploadRoot(uploadRoot));
 
+// --- Nginx als Proxy zulassen ---
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto |
+        ForwardedHeaders.XForwardedHost;
+
+    // Erlaubte default Proxies/Netze leeren (sonst wird geblockt)
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+
+    // Wie viele Proxies maximal in der Kette (Wir haben 1: Nginx)
+    options.ForwardLimit = 1;
+
+    // feste Nginx-IP explizit eintragen (Docker-Bridge-Netz (172.18.0.0/16))
+    options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("172.18.0.0"), 16));
+});
+
 // =====----- build -----=====
 var app = builder.Build();
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+app.UseForwardedHeaders(/*new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+}*/);
 app.UseSerilogRequestLogging();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    // PathBase vom Reverse Proxy akzeptieren (X-Forwarded-Prefix)
+    /*
+    app.Use((ctx, next) =>
+    {
+        var prefix = ctx.Request.Headers["X-Forwarded-Prefix"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(prefix))
+            ctx.Request.PathBase = prefix; // z.B. /swagger (nur UI), /api (falls du je umhängst)
+        return next();
+    });
+    */
+    // Swagger "servers" dynamisch aufbauen (Scheme/Host vom Proxy; API-Basis aus Header)
+    /*app.UseSwagger(c =>
+    {
+        c.PreSerializeFilters.Add((swagger, httpReq) =>
+        {
+            try
+            {
+                var scheme = httpReq.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? httpReq.Scheme ?? "http";
+                var host = httpReq.Headers["X-Forwarded-Host"].FirstOrDefault() ?? httpReq.Host.Value ?? "localhost";
+                var externalApiBase = httpReq.Headers["X-External-Api-Base"].FirstOrDefault() ?? string.Empty;
+                swagger.Servers = new List<Microsoft.OpenApi.Models.OpenApiServer>
+            {
+                new() { Url = $"{scheme}://{host}{externalApiBase}" }
+            };
+            }
+            catch {
+                // ignore
+            }
+        });
+    });
+    */
     app.UseSwagger();
     app.UseSwaggerUI();
 

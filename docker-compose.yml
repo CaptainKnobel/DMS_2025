@@ -13,6 +13,7 @@ services:
       - Minio__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
       - Minio__Bucket=${MINIO_BUCKET:-uploads}
       - Minio__UseSSL=false
+      #- ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
     depends_on:
       postgres:
         condition: service_healthy
@@ -22,6 +23,18 @@ services:
         condition: service_started
     networks:
       - postgres
+
+  certgen:
+    image: frapsoft/openssl
+    command: >
+      sh -c 'mkdir -p /certs && [ -f /certs/dev.crt ] && [ -f /certs/dev.key ] || openssl req -x509 -nodes -newkey rsa:2048
+      -keyout /certs/dev.key
+      -out /certs/dev.crt
+      -days 365
+      -subj "/CN=localhost"'
+    volumes:
+      - nginx-certs:/certs
+    restart: "no"
 
   postgres:
     image: postgis/postgis:15-3.3
@@ -61,13 +74,16 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "8081:80"
+      - "8081:80"   # wird jetzt auf 443 redirected
+      - "8443:443"  # HTTPS veroeffentlichen
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      #- ./nginx:/etc/nginx/conf.d:ro
-      #- ./DMS_2025.UI/wwwroot/src:/usr/share/nginx/html:ro
+      #- ./certs:/etc/nginx/certs:ro
+      - nginx-certs:/etc/nginx/certs:ro
       - ./DMS_2025.UI/wwwroot:/usr/share/nginx/html:ro
     depends_on:
+        certgen:
+            condition: service_completed_successfully
         dms_2025:
             condition: service_started
         paperless:
@@ -204,3 +220,4 @@ volumes:
   pgadmin:
   paperless-db:
   minio-data:
+  nginx-certs:  

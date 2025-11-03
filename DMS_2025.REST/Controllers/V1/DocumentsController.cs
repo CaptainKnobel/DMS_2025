@@ -272,7 +272,7 @@ namespace DMS_2025.REST.Controllers.V1
         [HttpPut("{id:guid}/file")]
         [Consumes("multipart/form-data")]
         [RequestSizeLimit(20L * 1024 * 1024)]
-        public async Task<IActionResult> ReplaceFile(Guid id, [FromForm] IFormFile file, CancellationToken ct)
+        public async Task<IActionResult> ReplaceFile(Guid id, IFormFile file, CancellationToken ct)
         {
             if (file is null) return BadRequest(new { error = "file is required" });
 
