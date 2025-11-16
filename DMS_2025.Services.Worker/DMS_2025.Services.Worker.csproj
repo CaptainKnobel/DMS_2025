@@ -23,4 +23,8 @@
     <PackageReference Include="Tesseract" Version="5.2.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\DMS_2025.DAL\DMS_2025.DAL.csproj" />
+  </ItemGroup>
+
 </Project>

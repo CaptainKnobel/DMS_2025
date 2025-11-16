@@ -204,6 +204,18 @@
                 : '—';
             tr.appendChild(tdFile);
 
+            const tdSummary = document.createElement('td');
+            if (doc.summary) {
+                const full = doc.summary.trim();
+                const maxLen = 80; // tweak to fit in table
+                const shortText = full.length > maxLen ? full.slice(0, maxLen) + '...' : full;
+                tdSummary.textContent = shortText;
+                tdSummary.title = full; // show full summary on hover
+            } else {
+                tdSummary.textContent = '—';
+            }
+            tr.appendChild(tdSummary);
+
             const tdActions = document.createElement('td');
             tdActions.className = 'text-nowrap';
 

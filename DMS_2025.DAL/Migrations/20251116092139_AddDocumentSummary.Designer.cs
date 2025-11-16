@@ -3,6 +3,7 @@ using System;
 using DMS_2025.DAL.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DMS_2025.DAL.Migrations
 {
     [DbContext(typeof(DmsDbContext))]
-    partial class DmsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251116092139_AddDocumentSummary")]
+    partial class AddDocumentSummary
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

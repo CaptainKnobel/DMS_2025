@@ -13,6 +13,7 @@ namespace DMS_2025.Models
         public Guid Id { get; set; }
         public string? Title { get; set; }
         public string? Location { get; set; }           // Human-friendly Ablage- oder Entstehungsort (fachlich), NICHT der Datei-Pfad.
+        public string? Summary { get; set; }            // AI summary
 
         // metadata
         public DateTime? CreationDate { get; set; }
