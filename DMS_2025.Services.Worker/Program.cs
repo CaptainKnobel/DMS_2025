@@ -15,6 +15,9 @@ using Serilog;
 using System;
 using System.Text;
 using System.Text.Json;
+using DMS_2025.DAL.Context;
+using Microsoft.EntityFrameworkCore;
+using DMS_2025.Services.Worker.GenAI;
 
 await Host.CreateDefaultBuilder(args)
     .UseSerilog((ctx, lc) => lc
@@ -51,6 +54,19 @@ await Host.CreateDefaultBuilder(args)
                 .Build();
         });
 
+        // DbContext 
+        var connStr = ctx.Configuration.GetConnectionString("Default")
+                  ?? Environment.GetEnvironmentVariable("ConnectionStrings__Default")
+                  ?? "Host=postgres;Port=5432;Database=dms_db;Username=postgres;Password=postgres";
+
+        services.AddDbContext<DmsDbContext>(opt =>
+        {
+            opt.UseNpgsql(connStr);
+        });
+
+        // GeminiService for calling Gemini API
+        services.AddSingleton<GeminiService>();
+
         // register QueueConsumer
         services.AddHostedService<QueueConsumer>();
     })
@@ -65,8 +81,11 @@ public class QueueConsumer : BackgroundService
     private readonly ILogger<QueueConsumer> _log;
     private readonly int _demoDelayMs;
     private readonly IMinioClient _minio;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly GeminiService _gemini;
 
-    public QueueConsumer(ConnectionFactory factory, IConfiguration cfg, ILogger<QueueConsumer> log, IMinioClient minio)
+    public QueueConsumer(ConnectionFactory factory, IConfiguration cfg, ILogger<QueueConsumer> log, IMinioClient minio, IServiceScopeFactory scopeFactory,
+    GeminiService gemini)
     {
         _factory = factory;
         _queue = cfg["RabbitMQ:Queue"]
@@ -75,6 +94,8 @@ public class QueueConsumer : BackgroundService
         _demoDelayMs = int.TryParse(cfg["WORKER_DEMO_DELAY_MS"], out var ms) ? ms : 0;
         _log = log;
         _minio = minio;
+        _scopeFactory = scopeFactory;
+        _gemini = gemini;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -118,6 +139,14 @@ public class QueueConsumer : BackgroundService
                 var root = doc.RootElement;
                 var type = root.TryGetProperty("type", out var t) ? t.GetString() : null;
 
+                Guid? documentId = null;
+                if (root.TryGetProperty("documentId", out var docIdElement)
+                    && docIdElement.ValueKind == JsonValueKind.String
+                    && Guid.TryParse(docIdElement.GetString(), out var parsed))
+                {
+                    documentId = parsed;
+                }
+
                 if (string.Equals(type, "OcrRequested", StringComparison.OrdinalIgnoreCase))
                 {
                     var bucket = root.GetProperty("bucket").GetString()!;
@@ -144,6 +173,48 @@ public class QueueConsumer : BackgroundService
                     };
 
                     _log.LogInformation("OCR({Mode}) for {Original}: {Preview}...", mode, original, text.Length > 200 ? text[..200] : text);
+
+                    // GenAI + DB update
+                    if (documentId.HasValue)
+                    {
+                        try
+                        {
+                            _log.LogInformation("Requesting GenAI summary for document {DocId}", documentId);
+
+                            var summary = await _gemini.SummarizeAsync(text, stoppingToken);
+                            if (!string.IsNullOrWhiteSpace(summary))
+                            {
+                                using var scope = _scopeFactory.CreateScope();
+                                var db = scope.ServiceProvider.GetRequiredService<DmsDbContext>();
+
+                                var entity = await db.Documents
+                                    .FirstOrDefaultAsync(d => d.Id == documentId.Value, stoppingToken);
+
+                                if (entity is null)
+                                {
+                                    _log.LogWarning("Document {DocId} not found when trying to store summary", documentId);
+                                }
+                                else
+                                {
+                                    entity.Summary = summary;
+                                    await db.SaveChangesAsync(stoppingToken);
+                                    _log.LogInformation("Stored summary for document {DocId}", documentId);
+                                }
+                            }
+                            else
+                            {
+                                _log.LogWarning("GenAI returned empty summary for document {DocId}", documentId);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _log.LogError(ex, "Error while generating/storing summary for document {DocId}", documentId);
+                        }
+                    }
+                    else
+                    {
+                        _log.LogWarning("OCR message had no documentId; skipping summary generation");
+                    }
                 }
                 else
                 {

@@ -204,6 +204,8 @@ services:
       - MINIO__BUCKET=${MINIO_BUCKET:-uploads}
       - OCR_MODE=cli                           # old: magick+tess
       - WORKER_DEMO_DELAY_MS=1200
+      - ConnectionStrings__Default=Host=${POSTGRES_HOST:-postgres};Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       rabbitmq:
         condition: service_healthy
