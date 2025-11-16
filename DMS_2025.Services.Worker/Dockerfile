@@ -45,11 +45,12 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ghostscript \
       tesseract-ocr \
-      tesseract-ocr-deu \
-      tesseract-ocr-eng \
+      tesseract-ocr-all \
+      #tesseract-ocr-deu \
+      #tesseract-ocr-eng \
  && rm -rf /var/lib/apt/lists/*
 
-ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
+# ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
 
 WORKDIR /app
 COPY --from=build /app/publish .

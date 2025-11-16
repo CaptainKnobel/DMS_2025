@@ -14,6 +14,8 @@ services:
       - Minio__Bucket=${MINIO_BUCKET:-uploads}
       - Minio__UseSSL=false
       #- ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+    ports:
+      - "7000:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -200,7 +202,7 @@ services:
       - MINIO__ACCESSKEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO__SECRETKEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO__BUCKET=${MINIO_BUCKET:-uploads}
-      - OCR_MODE=magick+tess
+      - OCR_MODE=cli                           # old: magick+tess
       - WORKER_DEMO_DELAY_MS=1200
     depends_on:
       rabbitmq:
