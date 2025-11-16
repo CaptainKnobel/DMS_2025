@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Minio;
 using Minio.DataModel.Args;
+using Minio.DataModel;
 using Microsoft.Extensions.Options;
 using DMS_2025.REST.Config;
 
@@ -76,6 +77,27 @@ namespace DMS_2025.REST.Controllers.V1
                 Summary = d.Summary
             };
         }
+
+        private async Task DeleteMinioObjectsAsync(Guid documentId, CancellationToken ct)
+        {
+            // all objects for a document live under "<documentId>/..."
+            var prefix = $"{documentId}/";
+
+            var listArgs = new ListObjectsArgs()
+                .WithBucket(_minioCfg.Bucket)
+                .WithPrefix(prefix)
+                .WithRecursive(true);
+
+            await foreach (var item in _minio.ListObjectsEnumAsync(listArgs, ct))
+            {
+                await _minio.RemoveObjectAsync(
+                    new RemoveObjectArgs()
+                        .WithBucket(_minioCfg.Bucket)
+                        .WithObject(item.Key),
+                    ct);
+            }
+        }
+
 
 
         /// GET /api/v1/documents?page=&pageSize=&q=&sort=
@@ -329,6 +351,10 @@ namespace DMS_2025.REST.Controllers.V1
             {
                 SafeDelete(d.FilePath);
             }
+
+            // delete all MinIO objects for document with this id
+            await DeleteMinioObjectsAsync(id, ct);
+
             await _repo.DeleteAsync(id, ct);
             await _repo.SaveChangesAsync(ct);
             return NoContent();
@@ -344,6 +370,9 @@ namespace DMS_2025.REST.Controllers.V1
             {
                 SafeDelete(d.FilePath);
             }
+
+            // delete minio objects for this document's file
+            await DeleteMinioObjectsAsync(id, ct);
 
             d.FilePath = null;
             d.OriginalFileName = null;
