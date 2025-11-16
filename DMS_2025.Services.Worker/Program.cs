@@ -155,7 +155,7 @@ public class QueueConsumer : BackgroundService
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error while processing message");
-                ch.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);
+                ch.BasicNack(ea.DeliveryTag, multiple: false, requeue: false);
             }
         };
 
@@ -281,7 +281,7 @@ public class QueueConsumer : BackgroundService
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "tesseract",
-                Arguments = $"\"{img}\" stdout -l deu+eng",
+                Arguments = $"--tessdata-dir /usr/share/tesseract-ocr/5/tessdata \"{img}\" stdout -l deu+eng", // $"\"{img}\" stdout -l deu+eng",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
