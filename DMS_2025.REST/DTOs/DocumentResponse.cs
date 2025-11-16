@@ -9,6 +9,7 @@ namespace DMS_2025.REST.DTOs
         public string? Location { get; set; }
         public DateTime? CreationDate { get; set; }
         public string? Author { get; set; }
+        public string? Summary { get; set; }
 
         // read-only Infos für UI
         public bool HasFile { get; set; }

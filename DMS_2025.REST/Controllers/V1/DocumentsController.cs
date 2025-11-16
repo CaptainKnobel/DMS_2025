@@ -61,6 +61,22 @@ namespace DMS_2025.REST.Controllers.V1
                 System.IO.File.Delete(full);
         }
 
+        private static DocumentResponse ToResponse(Document d)
+        {
+            return new DocumentResponse
+            {
+                Id = d.Id,
+                Title = d.Title,
+                Location = d.Location,
+                CreationDate = d.CreationDate,
+                Author = d.Author,
+                HasFile = !string.IsNullOrWhiteSpace(d.FilePath),
+                FileSize = d.FileSize,
+                OriginalFileName = d.OriginalFileName,
+                Summary = d.Summary
+            };
+        }
+
 
         /// GET /api/v1/documents?page=&pageSize=&q=&sort=
         [HttpGet]
@@ -101,17 +117,19 @@ namespace DMS_2025.REST.Controllers.V1
 
             Response.Headers["X-Total-Count"] = total.ToString();
 
-            var result = items.Select(d => new DocumentResponse
-            {
-                Id = d.Id,
-                Title = d.Title,
-                Location = d.Location,
-                CreationDate = d.CreationDate,
-                Author = d.Author,
-                HasFile = !string.IsNullOrWhiteSpace(d.FilePath),
-                FileSize = d.FileSize,
-                OriginalFileName = d.OriginalFileName
-            });
+            //var result = items.Select(d => new DocumentResponse
+            //{
+            //    Id = d.Id,
+            //    Title = d.Title,
+            //    Location = d.Location,
+            //    CreationDate = d.CreationDate,
+            //    Author = d.Author,
+            //    HasFile = !string.IsNullOrWhiteSpace(d.FilePath),
+            //    FileSize = d.FileSize,
+            //    OriginalFileName = d.OriginalFileName
+            //});
+
+            var result = items.Select(ToResponse);
 
             return Ok(result);
         }
@@ -123,17 +141,18 @@ namespace DMS_2025.REST.Controllers.V1
             var d = await _repo.GetAsync(id, ct);
             return d is null
                 ? NotFound()
-                : Ok(new DocumentResponse
-                {
-                    Id = d.Id,
-                    Title = d.Title,
-                    Location = d.Location,
-                    CreationDate = d.CreationDate,
-                    Author = d.Author,
-                    HasFile = !string.IsNullOrWhiteSpace(d.FilePath),
-                    FileSize = d.FileSize,
-                    OriginalFileName = d.OriginalFileName
-                });
+                : Ok(ToResponse(d));
+                //: Ok(new DocumentResponse
+                //{
+                //    Id = d.Id,
+                //    Title = d.Title,
+                //    Location = d.Location,
+                //    CreationDate = d.CreationDate,
+                //    Author = d.Author,
+                //    HasFile = !string.IsNullOrWhiteSpace(d.FilePath),
+                //    FileSize = d.FileSize,
+                //    OriginalFileName = d.OriginalFileName
+                //});
         }
 
         // Download
@@ -170,18 +189,21 @@ namespace DMS_2025.REST.Controllers.V1
             await _repo.SaveChangesAsync(ct); // WICHTIG
             await _pub.PublishDocumentCreatedAsync(entity, ct);
 
-            var dto = new DocumentResponse
-            {
-                Id = entity.Id,
-                Title = entity.Title,
-                Location = entity.Location,
-                CreationDate = entity.CreationDate,
-                Author = entity.Author,
-                HasFile = !string.IsNullOrWhiteSpace(entity.FilePath),
-                FileSize = entity.FileSize,
-                OriginalFileName = entity.OriginalFileName
-            };
+            //var dto = new DocumentResponse
+            //{
+            //    Id = entity.Id,
+            //    Title = entity.Title,
+            //    Location = entity.Location,
+            //    CreationDate = entity.CreationDate,
+            //    Author = entity.Author,
+            //    HasFile = !string.IsNullOrWhiteSpace(entity.FilePath),
+            //    FileSize = entity.FileSize,
+            //    OriginalFileName = entity.OriginalFileName
+            //};
 
+            // return CreatedAtAction(nameof(Get), new { id = dto.Id }, dto);
+
+            var dto = ToResponse(entity);
             return CreatedAtAction(nameof(Get), new { id = dto.Id }, dto);
         }
 
@@ -238,17 +260,19 @@ namespace DMS_2025.REST.Controllers.V1
             ), ct);
 
             // Response: Return Created with a DTO
-            return CreatedAtAction(nameof(Get), new { id = entity.Id }, new DocumentResponse
-            {
-                Id = entity.Id,
-                Title = entity.Title,
-                Location = entity.Location,
-                CreationDate = entity.CreationDate,
-                Author = entity.Author,
-                HasFile = true,
-                FileSize = entity.FileSize,
-                OriginalFileName = entity.OriginalFileName
-            });
+            //return CreatedAtAction(nameof(Get), new { id = entity.Id }, new DocumentResponse
+            //{
+            //    Id = entity.Id,
+            //    Title = entity.Title,
+            //    Location = entity.Location,
+            //    CreationDate = entity.CreationDate,
+            //    Author = entity.Author,
+            //    HasFile = true,
+            //    FileSize = entity.FileSize,
+            //    OriginalFileName = entity.OriginalFileName
+            //});
+
+            return CreatedAtAction(nameof(Get), new { id = entity.Id }, ToResponse(entity));
         }
 
         /// PUT /api/v1/documents/{id}
