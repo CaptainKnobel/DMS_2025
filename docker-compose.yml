@@ -14,6 +14,10 @@ services:
       - Minio__Bucket=${MINIO_BUCKET:-uploads}
       - Minio__UseSSL=false
       #- ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
+      - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT}
+      - ELASTICSEARCH_SCHEME=${ELASTICSEARCH_SCHEME}
+      - ELASTICSEARCH_INDEX_DOCUMENTS=${ELASTICSEARCH_INDEX_DOCUMENTS}
     ports:
       - "7000:8080"
     depends_on:
@@ -206,6 +210,11 @@ services:
       - WORKER_DEMO_DELAY_MS=1200
       - ConnectionStrings__Default=Host=${POSTGRES_HOST:-postgres};Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
+      - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT}
+      - ELASTICSEARCH_SCHEME=${ELASTICSEARCH_SCHEME}
+      - ELASTICSEARCH_INDEX_DOCUMENTS=${ELASTICSEARCH_INDEX_DOCUMENTS}
+
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -214,6 +223,24 @@ services:
     networks:
       - postgres
     restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+
 
 networks:
   postgres:
@@ -225,3 +252,4 @@ volumes:
   paperless-db:
   minio-data:
   nginx-certs:  
+  esdata:  
