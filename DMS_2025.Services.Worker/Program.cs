@@ -1,5 +1,14 @@
 ﻿// See https://aka.ms/new-console-template for more information
+using System;
+using System.Text;
+using System.Text.Json;
+using DMS_2025.DAL.Context;
 using DMS_2025.Services.Worker.Config;
+using DMS_2025.Services.Worker.Elastic;
+using DMS_2025.Services.Worker.GenAI;
+using ImageMagick;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -9,15 +18,10 @@ using Minio;
 using Minio.DataModel.Args;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using ImageMagick;
-using Tesseract;
 using Serilog;
-using System;
-using System.Text;
-using System.Text.Json;
-using DMS_2025.DAL.Context;
-using Microsoft.EntityFrameworkCore;
-using DMS_2025.Services.Worker.GenAI;
+using Tesseract;
+
+
 
 await Host.CreateDefaultBuilder(args)
     .UseSerilog((ctx, lc) => lc
@@ -67,6 +71,36 @@ await Host.CreateDefaultBuilder(args)
         // GeminiService for calling Gemini API
         services.AddSingleton<GeminiService>();
 
+        // Elasticsearch
+        services.Configure<ElasticSettings>(opt =>
+        {
+            opt.Scheme = ctx.Configuration["ELASTICSEARCH_SCHEME"]
+                         ?? Environment.GetEnvironmentVariable("ELASTICSEARCH_SCHEME")
+                         ?? "http";
+
+            opt.Host = ctx.Configuration["ELASTICSEARCH_HOST"]
+                       ?? Environment.GetEnvironmentVariable("ELASTICSEARCH_HOST")
+                       ?? "elasticsearch";
+
+            opt.Port = int.TryParse(
+                ctx.Configuration["ELASTICSEARCH_PORT"] ?? Environment.GetEnvironmentVariable("ELASTICSEARCH_PORT"),
+                out var p) ? p : 9200;
+
+            opt.DocumentsIndex = ctx.Configuration["ELASTICSEARCH_INDEX_DOCUMENTS"]
+                       ?? Environment.GetEnvironmentVariable("ELASTICSEARCH_INDEX_DOCUMENTS")
+                       ?? "documents";
+        });
+
+        services.AddSingleton(sp =>
+        {
+            var es = sp.GetRequiredService<IOptions<ElasticSettings>>().Value;
+            var uri = new Uri($"{es.Scheme}://{es.Host}:{es.Port}");
+            var settings = new Elastic.Clients.Elasticsearch.ElasticsearchClientSettings(uri);
+            return new Elastic.Clients.Elasticsearch.ElasticsearchClient(settings);
+        });
+
+        services.AddSingleton<IDocumentIndexService, DocumentIndexService>();
+
         // register QueueConsumer
         services.AddHostedService<QueueConsumer>();
     })
@@ -83,9 +117,10 @@ public class QueueConsumer : BackgroundService
     private readonly IMinioClient _minio;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly GeminiService _gemini;
+    private readonly IDocumentIndexService _index;
 
     public QueueConsumer(ConnectionFactory factory, IConfiguration cfg, ILogger<QueueConsumer> log, IMinioClient minio, IServiceScopeFactory scopeFactory,
-    GeminiService gemini)
+    GeminiService gemini, IDocumentIndexService index)
     {
         _factory = factory;
         _queue = cfg["RabbitMQ:Queue"]
@@ -96,6 +131,7 @@ public class QueueConsumer : BackgroundService
         _minio = minio;
         _scopeFactory = scopeFactory;
         _gemini = gemini;
+        _index = index;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -179,6 +215,19 @@ public class QueueConsumer : BackgroundService
                     {
                         try
                         {
+                            // Index OCR text in Elasticsearch
+                            if (documentId.HasValue)
+                            {
+                                await _index.EnsureIndexAsync(stoppingToken);
+                                await _index.IndexAsync(new DocumentIndexItem
+                                {
+                                    Id = documentId.Value,
+                                    TextContent = text
+                                }, stoppingToken);
+
+                                _log.LogInformation("Indexed OCR text in Elasticsearch for document {DocId}", documentId);
+                            }
+
                             _log.LogInformation("Requesting GenAI summary for document {DocId}", documentId);
 
                             var summary = await _gemini.SummarizeAsync(text, stoppingToken);

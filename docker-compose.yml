@@ -216,6 +216,8 @@ services:
       - ELASTICSEARCH_INDEX_DOCUMENTS=${ELASTICSEARCH_INDEX_DOCUMENTS}
 
     depends_on:
+      elasticsearch:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       minio:
@@ -226,7 +228,6 @@ services:
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
-    container_name: elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -240,6 +241,8 @@ services:
       interval: 20s
       timeout: 10s
       retries: 10
+    networks:
+      - postgres
 
 
 networks:

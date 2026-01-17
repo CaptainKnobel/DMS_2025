@@ -66,7 +66,8 @@ namespace DMS_2025.Services.Worker.GenAI
 
             if (!response.IsSuccessStatusCode)
             {
-                // log details in the caller
+                Console.WriteLine($"[Gemini] HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                Console.WriteLine($"[Gemini] Body: {json}");
                 return null;
             }
 

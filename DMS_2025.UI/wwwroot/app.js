@@ -16,6 +16,10 @@
     const btnReset = document.getElementById('btnReset');
     const statusEl = document.getElementById('status');
     const alertEl = document.getElementById('alert');
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchClearBtn = document.getElementById('searchClearBtn');
+
 
     // Helpers
     const qErr = (n) => document.querySelector(`[data-error-for="${n}"]`);
@@ -51,6 +55,111 @@
         while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
         return `${n.toFixed(i ? 1 : 0)} ${u[i]}`;
     };
+
+    function renderDocs(rows) {
+        const tbody = document.querySelector('#docsTable tbody');
+        tbody.innerHTML = '';
+
+        rows.forEach(doc => {
+            const tr = document.createElement('tr');
+
+            const tdTitle = document.createElement('td');
+            tdTitle.textContent = doc.title ?? '';
+            tr.appendChild(tdTitle);
+
+            const tdAuthor = document.createElement('td');
+            tdAuthor.textContent = doc.author ?? '';
+            tr.appendChild(tdAuthor);
+
+            const tdCreated = document.createElement('td');
+            tdCreated.textContent = doc.creationDate ? new Date(doc.creationDate).toLocaleString() : '';
+            tr.appendChild(tdCreated);
+
+            const tdFile = document.createElement('td');
+            tdFile.textContent = doc.hasFile
+                ? `${doc.originalFileName ?? 'file'} (${((doc.fileSize ?? 0) / 1024) | 0} KB)`
+                : '—';
+            tr.appendChild(tdFile);
+
+            const tdSummary = document.createElement('td');
+            if (doc.summary) {
+                const full = doc.summary.trim();
+                const maxLen = 80;
+                tdSummary.textContent = full.length > maxLen ? full.slice(0, maxLen) + '...' : full;
+                tdSummary.title = full;
+            } else {
+                tdSummary.textContent = '—';
+            }
+            tr.appendChild(tdSummary);
+
+            const tdActions = document.createElement('td');
+            tdActions.className = 'text-nowrap';
+
+            const aDl = document.createElement('a');
+            aDl.className = 'btn btn-sm btn-outline-primary me-2';
+            aDl.href = `${API_BASE}/documents/${doc.id}/file`;
+            aDl.target = '_blank';
+            aDl.rel = 'noopener';
+            aDl.innerHTML = '<i class="bi bi-download"></i> Download';
+            if (!doc.hasFile) aDl.classList.add('disabled');
+            tdActions.appendChild(aDl);
+
+            const label = document.createElement('label');
+            label.className = 'btn btn-sm btn-outline-warning me-2 mb-0';
+            label.innerHTML = '<i class="bi bi-arrow-repeat"></i> Replace';
+            if (!doc.hasFile) label.classList.add('disabled');
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.className = 'd-none';
+            input.addEventListener('change', () => replaceFile(doc.id, input.files[0]));
+            label.appendChild(input);
+            tdActions.appendChild(label);
+
+            const btnDel = document.createElement('button');
+            btnDel.className = 'btn btn-sm btn-outline-danger';
+            btnDel.innerHTML = '<i class="bi bi-trash"></i> Delete';
+            btnDel.addEventListener('click', () => deleteDoc(doc.id));
+            tdActions.appendChild(btnDel);
+
+            tr.appendChild(tdActions);
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function loadDocs() {
+        const res = await fetch(`${API_BASE}/documents?page=1&pageSize=50`);
+        const rows = await res.json();
+        renderDocs(rows);
+    }
+
+    async function searchDocs(q) {
+        const res = await fetch(`${API_BASE}/documents/search?q=${encodeURIComponent(q)}&page=1&pageSize=50`);
+        if (!res.ok) {
+            showAlert('Search failed.', 'danger');
+            return;
+        }
+        const rows = await res.json();
+        renderDocs(rows);
+    }
+
+    searchBtn.addEventListener('click', () => {
+        const q = searchInput.value.trim();
+        if (!q) { loadDocs(); return; }
+        searchDocs(q);
+    });
+
+    searchClearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        loadDocs();
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchBtn.click();
+        }
+    });
+
 
     // Drag&Drop (minimal)
     const openPicker = (e) => { e?.preventDefault?.(); fileInput.click(); };
@@ -179,77 +288,6 @@
     });
 
     // more CRUD stuff
-    async function loadDocs() {
-        const res = await fetch(`${API_BASE}/documents?page=1&pageSize=50`);
-        const rows = await res.json();
-        const tbody = document.querySelector('#docsTable tbody');
-        tbody.innerHTML = '';
-        rows.forEach(doc => {
-            const tr = document.createElement('tr');
-            const tdTitle = document.createElement('td');
-            tdTitle.textContent = doc.title ?? '';
-            tr.appendChild(tdTitle);
-
-            const tdAuthor = document.createElement('td');
-            tdAuthor.textContent = doc.author ?? '';
-            tr.appendChild(tdAuthor);
-
-            const tdCreated = document.createElement('td');
-            tdCreated.textContent = doc.creationDate ? new Date(doc.creationDate).toLocaleString() : '';
-            tr.appendChild(tdCreated);
-
-            const tdFile = document.createElement('td');
-            tdFile.textContent = doc.hasFile
-                ? `${doc.originalFileName ?? 'file'} (${((doc.fileSize ?? 0) / 1024) | 0} KB)`
-                : '—';
-            tr.appendChild(tdFile);
-
-            const tdSummary = document.createElement('td');
-            if (doc.summary) {
-                const full = doc.summary.trim();
-                const maxLen = 80; // tweak to fit in table
-                const shortText = full.length > maxLen ? full.slice(0, maxLen) + '...' : full;
-                tdSummary.textContent = shortText;
-                tdSummary.title = full; // show full summary on hover
-            } else {
-                tdSummary.textContent = '—';
-            }
-            tr.appendChild(tdSummary);
-
-            const tdActions = document.createElement('td');
-            tdActions.className = 'text-nowrap';
-
-            const aDl = document.createElement('a');
-            aDl.className = 'btn btn-sm btn-outline-primary me-2';
-            aDl.href = `${API_BASE}/documents/${doc.id}/file`;
-            aDl.target = '_blank';
-            aDl.rel = 'noopener';
-            aDl.innerHTML = '<i class="bi bi-download"></i> Download';
-            if (!doc.hasFile) aDl.classList.add('disabled');
-            tdActions.appendChild(aDl);
-
-            const label = document.createElement('label');
-            label.className = 'btn btn-sm btn-outline-warning me-2 mb-0';
-            label.innerHTML = '<i class="bi bi-arrow-repeat"></i> Replace';
-            if (!doc.hasFile) label.classList.add('disabled');
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.className = 'd-none';
-            input.addEventListener('change', () => replaceFile(doc.id, input.files[0]));
-            label.appendChild(input);
-            tdActions.appendChild(label);
-
-            const btnDel = document.createElement('button');
-            btnDel.className = 'btn btn-sm btn-outline-danger';
-            btnDel.innerHTML = '<i class="bi bi-trash"></i> Delete';
-            btnDel.addEventListener('click', () => deleteDoc(doc.id));
-            tdActions.appendChild(btnDel);
-
-            tr.appendChild(tdActions);
-            tbody.appendChild(tr);
-        });
-    }
-
     window.replaceFile = async (id, file) => {
         if (!file) return;
         const fd = new FormData();

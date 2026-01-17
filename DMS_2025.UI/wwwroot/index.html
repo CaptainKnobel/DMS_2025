@@ -155,6 +155,16 @@
     </main>
     <hr class="my-4">
     <h2 class="h5 text-light">Documents</h2>
+    <div class="d-flex gap-2 align-items-center mb-2">
+        <input id="searchInput" class="form-control form-control-sm" type="search"
+               placeholder="Search in OCR text..." />
+        <button id="searchBtn" class="btn btn-sm btn-outline-primary" type="button">
+            <i class="bi bi-search"></i> Search
+        </button>
+        <button id="searchClearBtn" class="btn btn-sm btn-outline-secondary" type="button">
+            Clear
+        </button>
+    </div>
     <div class="table-responsive">
         <table class="table table-dark table-hover align-middle" id="docsTable">
             <thead>

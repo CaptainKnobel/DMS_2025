@@ -11,6 +11,7 @@ using Minio.DataModel.Args;
 using Minio.DataModel;
 using Microsoft.Extensions.Options;
 using DMS_2025.REST.Config;
+using DMS_2025.REST.Elastic; // IDocumentSearchService
 
 namespace DMS_2025.REST.Controllers.V1
 {
@@ -24,12 +25,15 @@ namespace DMS_2025.REST.Controllers.V1
         private readonly string _root;
         private readonly IMinioClient _minio;
         private readonly MinioSettings _minioCfg;
+        private readonly IDocumentSearchService _documentSearch;
+
         public DocumentsController(
             IDocumentRepository repo,
             IEventPublisher pub,
             UploadRoot root,
             IMinioClient minio,
-            IOptions<MinioSettings> minioCfg)
+            IOptions<MinioSettings> minioCfg,
+            IDocumentSearchService documentSearch)
         {
             _repo = repo;
             _pub = pub;
@@ -37,6 +41,7 @@ namespace DMS_2025.REST.Controllers.V1
             Directory.CreateDirectory(_root);
             _minio = minio;
             _minioCfg = minioCfg.Value;
+            _documentSearch = documentSearch;
         }
 
         // ----- Helper
@@ -384,5 +389,33 @@ namespace DMS_2025.REST.Controllers.V1
 
             return NoContent();
         }
+
+
+        [HttpGet("search")]
+        public async Task<ActionResult<IEnumerable<DocumentResponse>>> Search(
+            [FromQuery] string q,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(q))
+                return Ok(Array.Empty<DocumentResponse>());
+
+            var ids = await _documentSearch.SearchDocumentIdsAsync(q, page, pageSize, ct);
+
+            if (ids.Count == 0)
+                return Ok(Array.Empty<DocumentResponse>());
+
+            var docs = await _repo.Query()
+                .Where(d => ids.Contains(d.Id))
+                .ToListAsync(ct);
+
+            var lookup = docs.ToDictionary(d => d.Id);
+            var ordered = ids.Where(lookup.ContainsKey).Select(id => lookup[id]);
+
+            return Ok(ordered.Select(ToResponse));
+        }
+
+
     }
 }

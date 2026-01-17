@@ -21,6 +21,9 @@ using Microsoft.Extensions.Options;
 using Minio;
 using Microsoft.OpenApi.Models;
 using System.Net;
+using DMS_2025.REST.Elastic;
+using Elastic.Clients.Elasticsearch;
+using Elastic.Transport;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,6 +66,29 @@ builder.Services.AddDbContext<DmsDbContext>(opt =>
     )
 );
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
+
+// ----- Elasticsearch (REST search) -----
+builder.Services.Configure<ElasticSettings>(opt =>
+{
+    opt.Scheme = Environment.GetEnvironmentVariable("ELASTICSEARCH_SCHEME") ?? "http";
+    opt.Host = Environment.GetEnvironmentVariable("ELASTICSEARCH_HOST") ?? "elasticsearch";
+    opt.Port = int.TryParse(Environment.GetEnvironmentVariable("ELASTICSEARCH_PORT"), out var p) ? p : 9200;
+    opt.IndexDocuments = Environment.GetEnvironmentVariable("ELASTICSEARCH_INDEX_DOCUMENTS") ?? "documents";
+});
+
+builder.Services.AddSingleton(sp =>
+{
+    var s = sp.GetRequiredService<IOptions<ElasticSettings>>().Value;
+    var uri = new Uri($"{s.Scheme}://{s.Host}:{s.Port}");
+
+    var settings = new ElasticsearchClientSettings(uri)
+        .DisableDirectStreaming(); // optional, helps debugging
+
+    return new ElasticsearchClient(settings);
+});
+
+builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
+
 
 // CORS nur für Dev: erlaube UI-Ursprünge
 builder.Services.AddCors(o => o.AddPolicy("Dev", p =>
